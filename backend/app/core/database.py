@@ -17,9 +17,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db() -> Session:
-    """FastAPI 依赖注入：每个请求生成一个独立数据库会话，请求结束后自动关闭"""
+    """FastAPI 依赖注入：每个请求生成一个独立数据库会话。
+
+    请求成功返回时自动 commit，异常时自动 rollback，请求结束后关闭会话。
+    """
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

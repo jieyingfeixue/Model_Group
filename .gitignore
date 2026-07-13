@@ -1,0 +1,43 @@
+# ──── Python ────
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# ──── 环境变量 ────
+.env
+.env.local
+.env.*.local
+
+# ──── IDE ────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ──── OS ────
+Thumbs.db
+.DS_Store
+
+# ──── Docker ────
+docker-compose.override.yml
+
+# ──── 日志 ────
+*.log
+logs/
+
+# ──── 临时文件 ────
+*.tmp
+*.temp
+tmp/
+
+# ──── Jupyter ────
+.ipynb_checkpoints/
+
+# ──── MinIO 数据（本地开发） ────
+minio_data/
