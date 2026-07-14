@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.data_resource import DataResourceCreate, DataResourceResponse
+from app.schemas.data_resource import (
+    AlignmentRequest,
+    AlignmentResponse,
+    DataResourceCreate,
+    DataResourceResponse,
+)
 from app.services import normal_data_service
 
 router = APIRouter(tags=["Data"])
@@ -20,10 +25,14 @@ async def upload_data(
     name: str = Form(..., description="文件名"),
     modality: str = Form("visible", description="模态类型"),
     meta_info: str = Form("{}", description="JSON 字符串，附加元信息"),
+    captured_at: float | None = Form(None, description="采集时间戳（Unix 秒），可选"),
+    annotation_file: UploadFile | None = File(None, description="标注文件（COCO JSON / VOC ZIP / YOLO ZIP）"),
+    format: str | None = Form(None, description="标注格式：coco / voc / yolo"),
+    task_id: int | None = Form(None, description="关联的标注任务 ID，不传则自动创建"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """上传图片到 MinIO。multipart/form-data，Pillow 自动提取宽高/通道数。
+    """上传图片到 MinIO。可选附带标注文件，自动解析并导入 annotations 表。
 
     Form 参数经 DataResourceCreate Schema 校验后再传入 Service。
     """
@@ -40,13 +49,33 @@ async def upload_data(
         meta.setdefault("modality", modality)
 
     # 通过 Schema 校验
-    DataResourceCreate(name=name, modality=meta.get("modality", "visible"), meta_info=meta)
+    DataResourceCreate(name=name, modality=meta.get("modality", "visible"), meta_info=meta, captured_at=captured_at)
 
+    # 附带标注文件 → 导入模式
+    if annotation_file and format:
+        result = normal_data_service.import_with_annotations(
+            db,
+            files=files,
+            annotation_file=annotation_file,
+            format=format,
+            owner_id=current_user.user_id,
+            meta_info=meta,
+            task_id=task_id,
+        )
+        return {
+            "resources": [DataResourceResponse.model_validate(r) for r in result["resources"]],
+            "task_id": result["task_id"],
+            "annotations_count": result["annotations_count"],
+            "warnings": result["warnings"],
+        }
+
+    # 普通上传模式
     resources = normal_data_service.upload_data(
         db,
         files=files,
         meta_info=meta,
         owner_id=current_user.user_id,
+        captured_at=captured_at,
     )
     return [DataResourceResponse.model_validate(r) for r in resources]
 
@@ -92,3 +121,20 @@ def list_data(
         "page": page,
         "size": size,
     }
+
+
+@router.post("/data/align", response_model=AlignmentResponse, status_code=201)
+def align_data(
+    body: AlignmentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """多模态时间戳对齐。按选定策略将多传感器帧配对，结果写入数据库。"""
+    result = normal_data_service.multi_modal_align(
+        db,
+        resource_ids=body.resource_ids,
+        strategy=body.strategy,
+        params=body.params,
+        user_id=current_user.user_id,
+    )
+    return AlignmentResponse(**result)

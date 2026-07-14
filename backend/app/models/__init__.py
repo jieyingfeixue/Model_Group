@@ -17,6 +17,7 @@ from app.models.infer_task import InferTask
 from app.models.eval_task import EvalTask
 from app.models.eval_result import EvalResult
 from app.models.audit_log import AuditLog
+from app.models.alignment_group import AlignmentGroup, AlignmentGroupItem
 
 __all__ = [
     "Base",
@@ -36,4 +37,6 @@ __all__ = [
     "EvalTask",
     "EvalResult",
     "AuditLog",
+    "AlignmentGroup",
+    "AlignmentGroupItem",
 ]

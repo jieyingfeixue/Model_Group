@@ -35,6 +35,10 @@ class DataResourceCreate(BaseModel):
 
     name: str
     modality: Modality
+    captured_at: float | None = Field(
+        default=None,
+        description="采集时间戳（Unix 秒，浮点），可来自 EXIF 自动提取或手动传入",
+    )
     meta_info: dict[str, Any] = Field(
         default_factory=dict,
         description="元信息，可含 width/height/channels/file_size/device/scene/weather/time_of_day 等",
@@ -73,3 +77,31 @@ class DataResourceResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+# ──── 对齐请求 / 响应 ────
+
+
+class AlignmentRequest(BaseModel):
+    """多模态时间戳对齐请求"""
+
+    resource_ids: list[int] = Field(..., min_length=2, description="参与对齐的数据资源 ID 列表")
+    strategy: str = Field(
+        ...,
+        pattern=r"^(nearest_neighbor|downsample|interpolate)$",
+        description="对齐策略：nearest_neighbor / downsample / interpolate",
+    )
+    params: dict[str, Any] = Field(
+        default_factory=dict,
+        description="策略参数：time_window_ms（nearest_neighbor） / target_fps（downsample） / interpolation_strategy（interpolate）",
+    )
+
+
+class AlignmentResponse(BaseModel):
+    """对齐结果响应"""
+
+    group_id: int
+    strategy: str
+    pairs_count: int
+    report: dict[str, Any]
+    created_at: datetime

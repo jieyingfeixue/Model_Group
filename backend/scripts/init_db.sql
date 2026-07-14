@@ -39,6 +39,7 @@ CREATE TABLE data_resources (
     modality         VARCHAR(20)     NOT NULL
                                      CHECK (modality IN ('visible', 'infrared', 'mmwave', 'lidar')),
     file_path        VARCHAR(500)    NOT NULL,
+    captured_at      DOUBLE PRECISION,              -- Unix 时间戳（秒），Pillow EXIF 自动提取或前端传入
     metadata         JSONB           NOT NULL DEFAULT '{}',
     version          INTEGER         NOT NULL DEFAULT 1,
     annotation_status VARCHAR(20)    NOT NULL DEFAULT 'unannotated'
@@ -157,6 +158,7 @@ CREATE TABLE annotation_tasks (
     status          VARCHAR(20)     NOT NULL DEFAULT 'draft'
                                     CHECK (status IN ('draft', 'in_progress', 'submitted', 'reviewing', 'completed')),
     deadline        TIMESTAMP,
+    review_info     JSONB           NOT NULL DEFAULT '{}',
     created_by      INTEGER         NOT NULL REFERENCES users(user_id)
                                     ON DELETE RESTRICT,
     created_at      TIMESTAMP       NOT NULL DEFAULT NOW()
@@ -177,7 +179,7 @@ CREATE TABLE annotations (
     bboxes          JSONB           NOT NULL DEFAULT '[]',
     version         INTEGER         NOT NULL DEFAULT 1,
     review_status   VARCHAR(20)     NOT NULL DEFAULT 'pending'
-                                    CHECK (review_status IN ('pending', 'approved', 'rejected')),
+                                    CHECK (review_status IN ('pending', 'submitted', 'approved', 'rejected')),
     reject_reasons  JSONB,
     created_by      INTEGER         NOT NULL REFERENCES users(user_id)
                                     ON DELETE RESTRICT,
@@ -342,3 +344,36 @@ CREATE INDEX idx_al_user_id     ON audit_logs (user_id);
 CREATE INDEX idx_al_action      ON audit_logs (action);
 CREATE INDEX idx_al_target_type ON audit_logs (target_type);
 CREATE INDEX idx_al_created_at  ON audit_logs (created_at);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- P3: 多模态对齐（第二阶段）
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- (17) alignment_groups 对齐任务组表
+CREATE TABLE alignment_groups (
+    group_id        SERIAL          PRIMARY KEY,
+    strategy        VARCHAR(50)     NOT NULL
+                                    CHECK (strategy IN ('nearest_neighbor', 'downsample', 'interpolate')),
+    params          JSONB           NOT NULL DEFAULT '{}',
+    report          JSONB           NOT NULL DEFAULT '{}',
+    created_by      INTEGER         NOT NULL REFERENCES users(user_id)
+                                    ON DELETE RESTRICT,
+    created_at      TIMESTAMP       NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_ag_created_by ON alignment_groups (created_by);
+CREATE INDEX idx_ag_strategy   ON alignment_groups (strategy);
+
+-- (18) alignment_group_items 对齐配对明细表
+CREATE TABLE alignment_group_items (
+    item_id         SERIAL          PRIMARY KEY,
+    group_id        INTEGER         NOT NULL REFERENCES alignment_groups(group_id)
+                                    ON DELETE CASCADE,
+    resource_id     INTEGER         NOT NULL REFERENCES data_resources(resource_id)
+                                    ON DELETE CASCADE,
+    sensor_type     VARCHAR(50)     NOT NULL
+                                    CHECK (sensor_type IN ('visible', 'infrared', 'mmwave', 'lidar')),
+    is_primary      BOOLEAN         NOT NULL DEFAULT false,
+    UNIQUE (group_id, resource_id)
+);
+CREATE INDEX idx_agi_group_id    ON alignment_group_items (group_id);
+CREATE INDEX idx_agi_resource_id ON alignment_group_items (resource_id);
