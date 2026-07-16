@@ -1,0 +1,12 @@
+{
+  "annotation_status": "unannotated",
+  "tags": [
+    "毫米波",
+    "雨天"
+  ],
+  "metadata": {
+    "scene": "rainy",
+    "weather": "clear",
+    "source": "本地导入"
+  }
+}

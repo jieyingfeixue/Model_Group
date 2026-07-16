@@ -1,0 +1,94 @@
+# ──── 目标检测数据与算法评测平台 — 本地开发环境 ────
+# 用法：docker-compose up -d          # 启动全部服务
+#       docker-compose down           # 停止并移除容器
+#       docker-compose down -v        # 停止并删除数据卷（慎用）
+#
+# 仅基础设施（原杨同学三件套）：
+#       docker-compose up -d postgres redis minio
+#
+# 含 API + Celery（张同学 Phase1）：
+#       docker-compose up -d
+
+version: "3.9"
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql://postgres:123456@postgres:5432/detection_platform
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: change-me-to-a-random-secret-string
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: minioadmin
+  MINIO_SECRET_KEY: minioadmin
+  MINIO_BUCKET: detection-platform
+  MINIO_SECURE: "false"
+
+services:
+  # ──── PostgreSQL 16 数据库 ────
+  postgres:
+    image: postgres:16
+    container_name: pg-local
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: "123456"
+      POSTGRES_DB: detection_platform
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # ──── Redis 7 缓存 / Celery Broker ────
+  redis:
+    image: redis:7-alpine
+    container_name: redis-local
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # ──── MinIO 对象存储 ────
+  minio:
+    image: minio/minio
+    container_name: minio-local
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    restart: unless-stopped
+
+  # ──── FastAPI 后端 ────
+  api:
+    build: ./backend
+    container_name: api-local
+    ports:
+      - "8000:8000"
+    environment:
+      <<: *backend-env
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  # ──── Celery Worker（训练 / 推理 / 评测异步任务）────
+  celery-worker:
+    build: ./backend
+    container_name: celery-worker-local
+    command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      <<: *backend-env
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:

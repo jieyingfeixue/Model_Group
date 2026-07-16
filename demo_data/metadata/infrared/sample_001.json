@@ -1,0 +1,11 @@
+{
+  "annotation_status": "unannotated",
+  "tags": ["城市", "白天", "待标注"],
+  "metadata": {
+    "scene": "daytime",
+    "weather": "cloudy",
+    "time_of_day": "day",
+    "source": "本地导入"
+  },
+  "created_at": "2024-05-12T10:30:00Z"
+}

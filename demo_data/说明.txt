@@ -1,0 +1,15 @@
+此目录用于无数据库阶段的扩展元数据（sidecar 文件）。
+
+目录结构与图片路径镜像，例如：
+  图片：demo_assets/images/visible/sample_001.jpg
+  元数据：demo_data/metadata/visible/sample_001.json
+
+sidecar JSON 可写字段：
+  annotation_status, tags, metadata, bboxes, versions, created_at
+
+新增图片后若缺少元数据，可运行：
+  python scripts/ensure_metadata.py
+
+联合筛选规则（后端 /api/data）：
+  模态 / 标注状态 / 场景 / 关键词 / 标签 / 日期范围 → 维度之间 AND
+  标签参数 tags 支持逗号分隔，命中任一标签即可（OR）
