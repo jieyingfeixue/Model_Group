@@ -60,9 +60,9 @@
   <div class="table-card">
     <el-table :data="datasets" style="margin-top:12px;">
       <el-table-column prop="name" label="数据集名称" />
-      <el-table-column prop="version" label="版本" width="80" />
-      <el-table-column prop="sample_count" label="样本数" width="100" />
-      <el-table-column prop="status" label="状态" width="100">
+      <el-table-column prop="version" label="版本" width="80" header-align="center" align="center" />
+      <el-table-column prop="sample_count" label="样本数" width="100" header-align="center" align="center" />
+      <el-table-column prop="status" label="状态" width="100" header-align="center" align="center">
         <template #default="{row}"><el-tag
         :type="statusType(row.status)"
         round
@@ -72,9 +72,9 @@
         </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="visibility" label="可见范围" width="100" />
-      <el-table-column prop="created_at" label="创建时间" width="120" />
-      <el-table-column label="操作" width="280">
+      <el-table-column prop="visibility" label="可见范围" width="100" header-align="center" align="center" />
+      <el-table-column prop="created_at" label="创建时间" width="120" header-align="center" align="center" />
+      <el-table-column label="操作" width="280" header-align="center" align="center">
         <template #default="{ row }">
 
           <!-- 详情 -->
@@ -158,19 +158,12 @@ function onArchive(row){ datasets.value = datasets.value.filter(d=>d.dataset_id!
 }
 h2{ margin-bottom:16px; }
 .hero{
-  padding:40px;
-  margin-bottom:30px;
-  border-radius:22px;
-  background:
-  linear-gradient(
-  135deg,
-  #1d4ed8,
-  #2563eb,
-  #3b82f6
-  );
+  padding:45px 50px;
+  margin-bottom:28px;
+  border-radius:18px;
   color:white;
-  box-shadow:
-  0 10px 30px rgba(37,99,235,.25);
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  box-shadow: 0 10px 30px rgba(30,64,175,.18);
 }
 
 .hero h1{

@@ -192,56 +192,12 @@ onMounted(fetchDatasets)
 .search-row .el-select{width:220px;}
 
 .market-hero{
-  padding:34px 40px;
+  padding:45px 50px;
   margin-bottom:28px;
-  border-radius:22px;
-
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(255,255,255,.18),
-      transparent 35%
-    ),
-    radial-gradient(
-      circle at bottom left,
-      rgba(96,165,250,.20),
-      transparent 40%
-    ),
-    linear-gradient(
-      135deg,
-      #1d4ed8,
-      #2563eb,
-      #3b82f6
-    );
-
+  border-radius:18px;
   color:white;
-
-  box-shadow:
-    0 10px 30px rgba(37,99,235,.25);
-
-  overflow:hidden;
-  position:relative;
-}
-.market-hero::before{
-  content:'';
-  position:absolute;
-  width:220px;
-  height:220px;
-  right:-60px;
-  top:-60px;
-  border-radius:50%;
-  background:rgba(255,255,255,.08);
-}
-
-.market-hero::after{
-  content:'';
-  position:absolute;
-  width:140px;
-  height:140px;
-  left:-30px;
-  bottom:-30px;
-  border-radius:50%;
-  background:rgba(255,255,255,.05);
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  box-shadow: 0 10px 30px rgba(30,64,175,.18);
 }
 
 .market-hero h1{

@@ -11,15 +11,13 @@ export async function getDataList(params) {
       page: params.page || 1,
       size: params.page_size || params.size || 20,
       modality: params.modality || undefined,
-      scene: params.scene || undefined,
-      annotation_status: params.annotation_status || undefined,
     }
   })
 }
 
 export async function getDataDetail(id) {
-  // 后端暂未提供单条查询，用列表接口模拟
-  return request.get('/data', { params: { page: 1, size: 100 } })
+  // 后端接口: GET /api/data/resources/{id}
+  return request.get(`/data/resources/${id}`)
 }
 
 // 后端暂未提供版本历史接口，保留函数签名后续对接
