@@ -30,6 +30,9 @@ class AnnotationTask(Base):
     deadline: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=False), nullable=True
     )
+    review_info: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
     created_by: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),

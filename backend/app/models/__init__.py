@@ -10,6 +10,7 @@ from app.models.annotation_task import AnnotationTask
 from app.models.annotation import Annotation
 from app.models.dataset import Dataset
 from app.models.dataset_item import DatasetItem
+from app.models.dataset_version import DatasetVersion
 from app.models.model_registry import Model
 from app.models.model_version import ModelVersion
 from app.models.train_task import TrainTask
@@ -17,6 +18,7 @@ from app.models.infer_task import InferTask
 from app.models.eval_task import EvalTask
 from app.models.eval_result import EvalResult
 from app.models.audit_log import AuditLog
+from app.models.alignment_group import AlignmentGroup, AlignmentGroupItem
 
 __all__ = [
     "Base",
@@ -29,6 +31,7 @@ __all__ = [
     "Annotation",
     "Dataset",
     "DatasetItem",
+    "DatasetVersion",
     "Model",
     "ModelVersion",
     "TrainTask",
@@ -36,4 +39,6 @@ __all__ = [
     "EvalTask",
     "EvalResult",
     "AuditLog",
+    "AlignmentGroup",
+    "AlignmentGroupItem",
 ]

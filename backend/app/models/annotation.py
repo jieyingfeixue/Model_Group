@@ -28,7 +28,11 @@ class Annotation(Base):
         Integer, nullable=False, default=1, server_default="1"
     )
     review_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending", server_default="pending"
+        String(20),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        comment="审核状态：pending / submitted / approved / rejected",
     )
     reject_reasons: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSONB, nullable=True
