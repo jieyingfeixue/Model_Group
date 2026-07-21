@@ -55,18 +55,17 @@
 
     </div>
 
-    <!-- 数据列表 -->
+    <!-- 样本列表 -->
     <div class="grid-card">
-
-      <DataGrid
-        :items="dataList"
-        :total="total"
-        :page-size="pageSize"
-        :current-page="currentPage"
-        @select="onSelect"
-        @page-change="onPageChange"
-      />
-
+      <div v-if="samples.length === 0" class="empty">暂无数据</div>
+      <div v-else class="sample-grid">
+        <SampleCard v-for="s in samples" :key="s.sample_id" :sample="s"
+          @select="onSelect" />
+      </div>
+      <div class="pagination" v-if="total > pageSize">
+        <el-pagination background layout="prev, pager, next" :total="total"
+          :page-size="pageSize" :current-page="currentPage" @current-change="onPageChange" />
+      </div>
     </div>
 
   </div>
@@ -76,11 +75,11 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SearchFilter from '@/components/common/SearchFilter.vue'
-import DataGrid from '@/components/common/DataGrid.vue'
-import { getDataList } from '@/api/data'
+import SampleCard from '@/components/common/SampleCard.vue'
+import { generateSamples } from '@/mock/data'
 
 const router = useRouter()
-const dataList = ref([])
+const samples = ref([])
 const total = ref(0)
 const pageSize = ref(12)
 const currentPage = ref(1)
@@ -89,30 +88,31 @@ const filters = ref({})
 function onFilterChange(val) {
   filters.value = val
   currentPage.value = 1
-  fetchData()
+  fetchSamples()
 }
-
-async function fetchData() {
+function fetchSamples() {
+  let all = generateSamples(12)
   const f = filters.value
-  const params = {
-    page: currentPage.value,
-    page_size: pageSize.value,
-    modality: f.modality || undefined,
+  // 模态筛选：AND 逻辑，样本必须同时包含所有选中模态
+  if (f.modality && f.modality.length > 0) {
+    all = all.filter(s => f.modality.every(m => s.images.some(img => img.modality === m)))
   }
-  try {
-    const { data } = await getDataList(params)
-    dataList.value = data.items || []
-    total.value = data.total || 0
-  } catch { /* backend not ready */ }
+  if (f.scene) {
+    all = all.filter(s => s.scene === f.scene)
+  }
+  if (f.keyword) {
+    all = all.filter(s => s.alignment_group_id.includes(f.keyword) || s.batch_id.includes(f.keyword))
+  }
+  const start = (currentPage.value - 1) * pageSize.value
+  samples.value = all.slice(start, start + pageSize.value)
+  total.value = all.length
 }
-
-function onSelect(item) {
-  const ids = dataList.value.map(d => d.resource_id)
-  router.push({ name: 'DataDetail', params: { id: item.resource_id }, query: { ids: ids.join(',') } })
+function onSelect(sample) {
+  // 点击样本，后续可跳转到样本详情页
+  console.log('Selected sample:', sample)
 }
-function onPageChange(page) { currentPage.value = page; fetchData() }
-
-onMounted(fetchData)
+function onPageChange(page) { currentPage.value = page; fetchSamples() }
+onMounted(fetchSamples)
 </script>
 
 <style scoped>
