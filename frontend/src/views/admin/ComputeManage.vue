@@ -1,7 +1,21 @@
 <template>
   <div class="page">
     <h2>算力 / 训练审批</h2>
-    <p class="hint">对接管理员训练审批接口。GPU 节点管理后端尚未实现。</p>
+    <div class="card" v-loading="loadingGpu">
+      <div class="toolbar">
+        <h3>GPU / 计算节点</h3>
+        <el-button size="small" @click="loadGpu">刷新节点</el-button>
+      </div>
+      <el-table :data="gpuNodes" size="small">
+        <el-table-column prop="node_id" label="节点" width="120" />
+        <el-table-column prop="name" label="名称" />
+        <el-table-column prop="type" label="类型" width="80" />
+        <el-table-column prop="status" label="状态" width="90" />
+        <el-table-column prop="max_parallel" label="并行" width="80" />
+        <el-table-column prop="executor" label="执行器" width="100" />
+      </el-table>
+    </div>
+
     <div class="card" v-loading="loading">
       <div class="toolbar">
         <h3>待审批训练任务</h3>
@@ -26,6 +40,25 @@
       </el-table>
       <el-empty v-if="!loading && !tasks.length" description="暂无待审批任务" />
     </div>
+
+    <div class="card" v-loading="loadingInfer">
+      <div class="toolbar">
+        <h3>推理任务（排队/失败可重试）</h3>
+        <el-button size="small" @click="loadInfer">刷新</el-button>
+      </div>
+      <el-table :data="inferTasks" size="small">
+        <el-table-column prop="task_id" label="ID" width="80" />
+        <el-table-column prop="model_id" label="模型" width="80" />
+        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column prop="image_id" label="image" width="90" />
+        <el-table-column prop="dataset_id" label="dataset" width="90" />
+        <el-table-column label="操作" width="120">
+          <template #default="{row}">
+            <el-button size="small" type="primary" @click="onApproveInfer(row)">审批/重试</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
   </div>
 </template>
 
@@ -37,10 +70,17 @@ import {
   approveTrain,
   rejectTrain,
   terminateTrain,
+  getPendingInferTasks,
+  approveInfer,
+  getGpuNodes,
 } from '@/api/admin'
 
 const tasks = ref([])
+const inferTasks = ref([])
+const gpuNodes = ref([])
 const loading = ref(false)
+const loadingInfer = ref(false)
+const loadingGpu = ref(false)
 
 function formatDate(v){ return v ? String(v).replace('T',' ').slice(0,19) : '-' }
 
@@ -53,6 +93,30 @@ async function fetchList() {
     ElMessage.error(e?.response?.data?.detail || '加载失败（需 admin）')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadInfer() {
+  loadingInfer.value = true
+  try {
+    const { data } = await getPendingInferTasks()
+    inferTasks.value = Array.isArray(data) ? data : (data.items || [])
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '推理列表加载失败')
+  } finally {
+    loadingInfer.value = false
+  }
+}
+
+async function loadGpu() {
+  loadingGpu.value = true
+  try {
+    const { data } = await getGpuNodes()
+    gpuNodes.value = data.items || (Array.isArray(data) ? data : [])
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '节点加载失败')
+  } finally {
+    loadingGpu.value = false
   }
 }
 
@@ -89,13 +153,26 @@ async function onTerminate(row) {
   }
 }
 
-onMounted(fetchList)
+async function onApproveInfer(row) {
+  try {
+    await approveInfer(row.task_id)
+    ElMessage.success('已入队/重试')
+    await loadInfer()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '操作失败')
+  }
+}
+
+onMounted(() => {
+  fetchList()
+  loadInfer()
+  loadGpu()
+})
 </script>
 
 <style scoped>
 .page{padding:24px;max-width:1100px;margin:0 auto}
-.hint{color:#64748b;margin-bottom:16px}
-.card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 h3{margin:0}
 </style>

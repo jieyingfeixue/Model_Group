@@ -1,6 +1,6 @@
 import request from './request'
 
-// 用户管理（后端尚未实现 — 调用会 404）
+// 用户管理
 export function getUsers(params)               { return request.get('/admin/users', { params }) }
 export function createUser(data)               { return request.post('/admin/users', data) }
 export function setUserRole(id, data)           { return request.put(`/admin/users/${id}/role`, data) }
@@ -19,7 +19,8 @@ export function deprecateCategory(sid, cid, data) {
 export function exportSchema(id)                { return request.get(`/admin/schemas/${id}/export`) }
 export function importSchema(data)              { return request.post('/admin/schemas/import', data) }
 
-// 数据源（后端尚未实现）
+// 数据源
+export function listDataSources()               { return request.get('/admin/data-sources') }
 export function createDataSource(data)          { return request.post('/admin/data-sources', data) }
 export function testConnection(id)              { return request.post(`/admin/data-sources/${id}/test`) }
 export function syncSource(id, data)            { return request.post(`/admin/data-sources/${id}/sync`, data) }
@@ -34,11 +35,13 @@ export function terminateTrain(id)              { return request.post(`/admin/tr
 export function getPendingInferTasks()          { return request.get('/admin/infer-tasks/pending') }
 export function approveInfer(id)                { return request.post(`/admin/infer-tasks/${id}/approve`) }
 export function getGpuNodes()                   { return request.get('/admin/gpu/nodes') }
+export function getConfig()                     { return request.get('/admin/config') }
 export function updateConfig(data)              { return request.put('/admin/config', data) }
 
 // 天梯榜
 export function lockTestset(id)                 { return request.post(`/admin/datasets/${id}/lock`) }
 export function invalidateResult(id)            { return request.post(`/admin/eval-results/${id}/invalidate`) }
 export function publishEvalResult(id)           { return request.post(`/admin/eval-results/${id}/publish`) }
+export function getEvalWeights()                { return request.get('/admin/eval/weights') }
 export function updateWeights(data)             { return request.put('/admin/eval/weights', data) }
 export function getLeaderboardCategories()      { return request.get('/admin/eval/categories') }

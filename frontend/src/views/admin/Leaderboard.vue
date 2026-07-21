@@ -8,6 +8,7 @@
           <el-input-number v-model="datasetId" :min="1" />
         </el-form-item>
         <el-button type="primary" :loading="loading" @click="loadBoard">刷新排行榜</el-button>
+        <el-button type="warning" @click="onLock">锁定试卷</el-button>
       </el-form>
       <el-table :data="rows" style="margin-top:12px">
         <el-table-column prop="rank" label="排名" width="70" />
@@ -23,26 +24,50 @@
         </el-table-column>
       </el-table>
     </div>
+
+    <div class="card">
+      <h3>指标权重</h3>
+      <p>夜间场景 mAP 权重: <el-slider v-model="weights.night_map_weight" :min="0" :max="1" :step="0.05" show-input style="width:360px;display:inline-flex;margin-left:12px" /></p>
+      <p>FPS 权重: <el-slider v-model="weights.fps_weight" :min="0" :max="1" :step="0.05" show-input style="width:360px;display:inline-flex;margin-left:12px" /></p>
+      <p>mAP@0.5 权重: <el-slider v-model="weights.map50_weight" :min="0" :max="1" :step="0.05" show-input style="width:360px;display:inline-flex;margin-left:12px" /></p>
+      <p>mAP@0.5:0.95 权重: <el-slider v-model="weights.map5095_weight" :min="0" :max="1" :step="0.05" show-input style="width:360px;display:inline-flex;margin-left:12px" /></p>
+      <el-button type="primary" @click="onSaveWeights">保存权重</el-button>
+      <el-button @click="loadWeights">重新加载</el-button>
+      <p class="hint">类别：{{ (weights.categories || []).join(', ') }}</p>
+    </div>
+
     <div class="card">
       <h3>按 Result ID 操作</h3>
       <el-input-number v-model="manualResultId" :min="1" />
       <el-button type="danger" style="margin-left:12px" @click="onInvalidate({ result_id: manualResultId })">注销跑分</el-button>
       <el-button type="success" style="margin-left:8px" @click="onPublish({ result_id: manualResultId })">纳入天梯</el-button>
-      <p class="hint">试卷锁定 / 权重调整等接口后端尚未实现，已从页面移除 Mock。</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getLeaderboard } from '@/api/eval'
-import { invalidateResult, publishEvalResult } from '@/api/admin'
+import {
+  invalidateResult,
+  publishEvalResult,
+  lockTestset,
+  getEvalWeights,
+  updateWeights,
+} from '@/api/admin'
 
 const datasetId = ref(1)
 const manualResultId = ref(1)
 const loading = ref(false)
 const rows = ref([])
+const weights = reactive({
+  night_map_weight: 0.3,
+  fps_weight: 0.1,
+  map50_weight: 0.4,
+  map5095_weight: 0.2,
+  categories: [],
+})
 
 function pick(obj, ...keys) {
   for (const k of keys) if (obj?.[k] != null) return obj[k]
@@ -71,6 +96,34 @@ async function loadBoard() {
   }
 }
 
+async function loadWeights() {
+  try {
+    const { data } = await getEvalWeights()
+    Object.assign(weights, data)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '权重加载失败')
+  }
+}
+
+async function onSaveWeights() {
+  try {
+    const { data } = await updateWeights({ ...weights })
+    Object.assign(weights, data)
+    ElMessage.success('权重已保存')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '保存失败')
+  }
+}
+
+async function onLock() {
+  try {
+    const { data } = await lockTestset(datasetId.value)
+    ElMessage.success(data.message || '已锁定')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '锁定失败')
+  }
+}
+
 async function onInvalidate(row) {
   if (!row?.result_id) return
   try {
@@ -92,6 +145,10 @@ async function onPublish(row) {
     ElMessage.error(e?.response?.data?.detail || '发布失败')
   }
 }
+
+onMounted(() => {
+  loadWeights()
+})
 </script>
 
 <style scoped>
