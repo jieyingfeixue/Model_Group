@@ -1,5 +1,0 @@
-"""Celery 异步任务包 — 训练 / 推理 / 评测"""
-
-from app.tasks.celery_app import celery_app
-
-__all__ = ["celery_app"]
