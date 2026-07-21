@@ -7,12 +7,13 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
 pydantic-settings==2.5.0
-pydantic[email]==2.9.2
 python-multipart==0.0.12
 redis==5.2.0
 python-dotenv==1.0.1
 minio==7.2.7
 Pillow==10.4.0
+email-validator==2.2.0
+scikit-learn==1.5.0
 celery[redis]==5.4.0
 # 模型侧 Phase2/3：训练执行 / ONNX 推理 / 评测
 docker==7.1.0

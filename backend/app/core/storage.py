@@ -1,5 +1,6 @@
 """对象存储抽象层 — MinIO 上传 / 下载 / URL 生成"""
 
+from datetime import timedelta
 from io import BytesIO
 
 from minio import Minio
@@ -71,7 +72,9 @@ def get_file_url(object_path: str, expires: int = 3600) -> str:
         return ""
 
     bucket, object_name = parts[0], parts[1]
-    return _client.presigned_get_object(bucket, object_name, expires=expires)
+    return _client.presigned_get_object(
+        bucket, object_name, expires=timedelta(seconds=expires)
+    )
 
 
 def download_file(object_path: str, bucket_name: str | None = None) -> bytes:

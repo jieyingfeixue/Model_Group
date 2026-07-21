@@ -82,20 +82,61 @@ class Dataset(Base):
         page: int = 1,
         size: int = 50,
     ) -> tuple[list[Dataset], int]:
-        """查询公开数据集，支持按模态、场景等条件筛选和分页"""
+        """查询公开数据集，支持多条件筛选和分页（Phase 3 增强）。
+
+        筛选维度：
+        - modality: 单值或多值列表（filters JSONB 中 modality 字段）
+        - scene / weather / time_of_day: filters JSONB 中的场景信息
+        - keyword: 数据集名称 + 描述模糊搜索
+        - sort_by: updated_at（默认）/ created_at
+        """
         query = db.query(cls).filter(
             cls.visibility == "public", cls.status == "published"
         )
         filters = filters or {}
 
         if modality := filters.get("modality"):
-            query = query.filter(cls.filters["modality"].astext == modality)
+            if isinstance(modality, list):
+                # 多值 IN 查询（filters JSONB 中匹配）
+                from sqlalchemy import or_
+                conditions = [
+                    cls.filters["modality"].astext == m for m in modality
+                ]
+                query = query.filter(or_(*conditions))
+            else:
+                query = query.filter(cls.filters["modality"].astext == modality)
         if scene := filters.get("scene"):
             query = query.filter(cls.filters["scene"].astext == scene)
+        if weather := filters.get("weather"):
+            query = query.filter(cls.filters["weather"].astext == weather)
+        if time_of_day := filters.get("time_of_day"):
+            query = query.filter(cls.filters["time_of_day"].astext == time_of_day)
+        if label_categories := filters.get("label_categories"):
+            # 匹配数据集创建时筛选条件中的 label_categories
+            # 支持单值或多值列表
+            from sqlalchemy import or_
+            if isinstance(label_categories, list):
+                conditions = [
+                    cls.filters["label_categories"].astext.contains(cat_id)
+                    for cat_id in label_categories
+                ]
+                query = query.filter(or_(*conditions))
+            else:
+                query = query.filter(
+                    cls.filters["label_categories"].astext.contains(label_categories)
+                )
+        if keyword := filters.get("keyword"):
+            query = query.filter(
+                (cls.name.ilike(f"%{keyword}%"))
+                | (cls.description.ilike(f"%{keyword}%"))
+            )
+
+        sort_by = filters.get("sort_by", "updated_at")
+        order_col = cls.updated_at if sort_by != "created_at" else cls.created_at
 
         total = query.count()
         datasets = (
-            query.order_by(cls.updated_at.desc())
+            query.order_by(order_col.desc())
             .offset((page - 1) * size)
             .limit(size)
             .all()
