@@ -196,7 +196,7 @@
         </div>
       </div>
       <div class="card">
-        <el-input v-model="datasetName2" placeholder="数据集名称" style="width:260px;margin-right:12px;" />
+        <el-input v-model="uploadOpts.name" placeholder="数据集名称" style="width:260px;margin-right:12px;" />
         <el-select v-model="uploadOpts.modality" placeholder="模态类型" style="width:160px;margin-right:12px;">
           <el-option v-for="m in modalities" :key="m" :label="modLabel(m)" :value="m" />
         </el-select>
@@ -214,44 +214,158 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/stores/user'
+import {
+  previewFilters,
+  createDataset,
+  splitDataset,
+  freezeDataset,
+  publishDataset,
+} from '@/api/dataset'
+import { uploadData } from '@/api/data'
 
+const userStore = useUserStore()
 const activeTab = ref('platform')
 const modalities = ['visible','infrared','mmwave','lidar']
 const scenes = ['daytime','night','rainy','foggy']
 const categoryList = [{id:1,name:'电线杆'},{id:2,name:'桥梁'},{id:3,name:'建筑物'},{id:4,name:'树木'},{id:5,name:'路灯'}]
 function modLabel(m){ const map={visible:'可见光',infrared:'红外',mmwave:'毫米波',lidar:'激光雷达'}; return map[m]||m }
-// ---- 方式一：平台数据 ----
+
 const filters = reactive({ modality:[], scene:[], annotation_status:'', labels:[], timeRange:null, logic:'and' })
 const split = reactive({ train:70, val:20, test:10, strategy:'random' })
 const hitCount = ref(null)
+const thumbnails = ref([])
 const datasetName = ref('')
 const versionNote = ref('')
 const datasetId = ref(null)
 const statusText = ref('draft')
-function onSearch(){ hitCount.value = 320 }
-function onCreate(){ datasetId.value = Date.now(); statusText.value='draft'; ElMessage.success('数据集已创建（Mock）') }
-function onFreeze(){ statusText.value='frozen'; ElMessage.success('已冻结') }
-function onPublish(){ statusText.value='published'; ElMessage.success('已发布') }
+const busy = ref(false)
 
 const statusLabel = computed(()=>{
-    const map = {
-        draft:'草稿',
-        frozen:'已冻结',
-        published:'已发布'
-    }
-    return map[statusText.value]
+    const map = { draft:'草稿', frozen:'已冻结', published:'已发布' }
+    return map[statusText.value] || statusText.value
 })
 
-// ---- 方式二：本地上传 ----
+function buildFilterPayload() {
+  const f = {
+    logic_operator: (filters.logic || 'and').toUpperCase(),
+  }
+  if (filters.modality?.length) f.modality = filters.modality
+  if (filters.scene?.length) f.scene = filters.scene[0]
+  if (filters.annotation_status) f.annotation_status = filters.annotation_status
+  if (filters.labels?.length) f.label_categories = filters.labels.map(String)
+  return f
+}
+
+async function onSearch(){
+  const ownerId = userStore.user?.user_id
+  if (!ownerId) {
+    ElMessage.warning('请先登录')
+    return
+  }
+  busy.value = true
+  try {
+    const { data } = await previewFilters({
+      filters: buildFilterPayload(),
+      owner_id: ownerId,
+    })
+    hitCount.value = data.total_count ?? 0
+    thumbnails.value = data.sample_thumbnails || []
+    ElMessage.success(`命中 ${hitCount.value} 条`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '预览失败')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function onCreate(){
+  if (!datasetName.value.trim()) {
+    ElMessage.warning('请填写数据集名称')
+    return
+  }
+  const ownerId = userStore.user?.user_id
+  busy.value = true
+  try {
+    const { data } = await createDataset({
+      name: datasetName.value.trim(),
+      description: versionNote.value || undefined,
+      filters: buildFilterPayload(),
+      owner_id: ownerId,
+    })
+    datasetId.value = data.dataset_id
+    statusText.value = data.status || 'draft'
+    ElMessage.success(`数据集已创建 #${data.dataset_id}`)
+    // 自动划分
+    await splitDataset(data.dataset_id, {
+      ratios: { train: split.train, val: split.val, test: split.test },
+      strategy: split.strategy || 'random',
+      stratify_by: 'scene',
+    })
+    ElMessage.success('子集划分完成')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '创建失败')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function onFreeze(){
+  if (!datasetId.value) return
+  try {
+    const { data } = await freezeDataset(datasetId.value)
+    statusText.value = data.status || 'frozen'
+    ElMessage.success('已冻结')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '冻结失败')
+  }
+}
+
+async function onPublish(){
+  if (!datasetId.value) return
+  try {
+    const { data } = await publishDataset(datasetId.value, { visibility: 'public' })
+    statusText.value = data.status || 'published'
+    ElMessage.success('已发布')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '发布失败')
+  }
+}
+
 const uploadFiles = ref([])
-const uploadOpts = reactive({ withAnnotation: false, format: 'coco', modality: 'visible' })
-const datasetName2 = ref('')
+const uploadOpts = reactive({ modality: 'visible', name: 'upload-batch' })
 const uploadDone = ref(false)
-function onFileChange(file){ uploadFiles.value.push(file) }
+
+function onFileChange(file){ uploadFiles.value.push(file.raw || file) }
 function onDrop(e){ const files = Array.from(e.dataTransfer.files); uploadFiles.value.push(...files) }
-function onUploadCreate(){ datasetId.value = Date.now(); statusText.value='draft'; uploadDone.value=true; ElMessage.success('数据集已创建（Mock）') }
+
+async function onUploadCreate(){
+  if (!uploadFiles.value.length) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+  busy.value = true
+  try {
+    const fd = new FormData()
+    uploadFiles.value.forEach((f) => fd.append('files', f))
+    fd.append('name', uploadOpts.name || 'upload-batch')
+    fd.append('modality', uploadOpts.modality || 'visible')
+    fd.append('meta_info', JSON.stringify({}))
+    await uploadData(fd)
+    ElMessage.success('图片已上传，请切到「从平台数据构建」筛选并创建数据集')
+    uploadDone.value = true
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '上传失败')
+  } finally {
+    busy.value = false
+  }
+}
+
+onMounted(() => {
+  if (!userStore.user) userStore.tryRestore()
+})
 </script>
 
 <style scoped>

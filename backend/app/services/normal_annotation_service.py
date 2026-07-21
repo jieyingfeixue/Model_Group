@@ -46,22 +46,38 @@ def _find_resource_or_404(db: Session, resource_id: int) -> DataResource:
     return resource
 
 
-def _count_matching_resources(db: Session, data_range: dict) -> int:
-    """根据 data_range 筛选条件统计匹配的数据资源总数"""
+def _matching_resources_query(db: Session, data_range: dict):
+    """根据 data_range 构建资源查询"""
     query = db.query(DataResource)
 
     if modality := data_range.get("modality"):
         query = query.filter(DataResource.modality == modality)
     if scene := data_range.get("scene"):
         query = query.filter(DataResource.meta_info["scene"].astext == scene)
-    if status := data_range.get("status"):
-        query = query.filter(DataResource.status == status)
+    if status_val := data_range.get("status"):
+        query = query.filter(DataResource.status == status_val)
     if batch_id := data_range.get("batch_id"):
         query = query.filter(DataResource.meta_info["batch_id"].astext == batch_id)
     if owner_id := data_range.get("owner_id"):
         query = query.filter(DataResource.owner_id == owner_id)
+    if resource_ids := data_range.get("resource_ids"):
+        query = query.filter(DataResource.resource_id.in_(resource_ids))
 
-    return query.count()
+    return query
+
+
+def _count_matching_resources(db: Session, data_range: dict) -> int:
+    """根据 data_range 筛选条件统计匹配的数据资源总数"""
+    return _matching_resources_query(db, data_range or {}).count()
+
+
+def list_matching_resources(db: Session, data_range: dict) -> list[DataResource]:
+    """按 data_range 列出匹配资源（按 id 升序）"""
+    return (
+        _matching_resources_query(db, data_range or {})
+        .order_by(DataResource.resource_id.asc())
+        .all()
+    )
 
 
 # ──── 标注任务管理 ────
@@ -306,6 +322,105 @@ def submit_annotation(
         task.save(db)
 
     return annotation
+
+
+# ──── 下一张 / 回滚 ────
+
+
+def get_next_image(db: Session, task_id: int, user_id: int) -> dict:
+    """返回任务中下一张待标注图片（优先未提交，否则返回第一张）。
+
+    API: GET /api/annotation/tasks/{id}/next
+    """
+    task = _find_task_or_404(db, task_id)
+    if user_id not in (task.assignee_ids or []) and task.created_by != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权访问该标注任务",
+        )
+
+    resources = list_matching_resources(db, task.data_range or {})
+    if not resources:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务 data_range 未匹配到任何图片",
+        )
+
+    submitted_ids = {
+        rid
+        for (rid,) in db.query(Annotation.resource_id)
+        .filter(
+            Annotation.task_id == task_id,
+            Annotation.review_status.in_(["submitted", "approved", "rejected"]),
+        )
+        .distinct()
+        .all()
+    }
+
+    chosen = None
+    for r in resources:
+        if r.resource_id not in submitted_ids:
+            chosen = r
+            break
+    if chosen is None:
+        chosen = resources[0]
+
+    latest = Annotation.get_latest(db, task_id, chosen.resource_id)
+    return {
+        "task_id": task_id,
+        "resource_id": chosen.resource_id,
+        "name": chosen.name,
+        "modality": chosen.modality,
+        "meta_info": chosen.meta_info or {},
+        "image_url": f"/api/images/{chosen.resource_id}",
+        "thumbnail_url": f"/api/images/{chosen.resource_id}/thumbnail",
+        "annotation": (
+            {
+                "annotation_id": latest.annotation_id,
+                "version": latest.version,
+                "bboxes": latest.bboxes,
+                "review_status": latest.review_status,
+            }
+            if latest
+            else None
+        ),
+        "remaining": max(0, len(resources) - len(submitted_ids)),
+        "total": len(resources),
+    }
+
+
+def rollback_annotation(
+    db: Session,
+    task_id: int,
+    resource_id: int,
+    version: int,
+    user_id: int,
+) -> Annotation:
+    """将指定历史版本的 bboxes 另存为新版本（回滚）。
+
+    API: POST /api/annotation/images/{id}/rollback
+    """
+    task = _find_task_or_404(db, task_id)
+    if user_id not in (task.assignee_ids or []) and task.created_by != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权回滚该标注",
+        )
+    history = Annotation.get_history(db, task_id, resource_id)
+    target = next((a for a in history if a.version == version), None)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"找不到版本 version={version}",
+        )
+    bboxes = target.bboxes if isinstance(target.bboxes, list) else []
+    return save_annotation(
+        db,
+        task_id=task_id,
+        resource_id=resource_id,
+        bboxes=bboxes,
+        user_id=user_id,
+    )
 
 
 # ──── 进度统计 ────

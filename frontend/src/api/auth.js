@@ -1,6 +1,6 @@
 import request from './request'
 
-const USE_MOCK = true
+const USE_MOCK = false  // 联调真后端；临时演示可改回 true
 
 // 伪造 JWT：payload 编码 { user_id, username, role }，实际项目中由后端签发
 function fakeToken(userId, role) {
@@ -41,3 +41,9 @@ export async function register(data) {
 
 export function getProfile()       { return request.get('/users/me') }
 export function updateProfile(d)   { return request.put('/users/me', d) }
+export function getMyHistory(params) { return request.get('/users/me/history', { params }) }
+export function logout(refreshToken) {
+  return request.post('/auth/logout', null, {
+    params: refreshToken ? { refresh_token: refreshToken } : undefined,
+  })
+}

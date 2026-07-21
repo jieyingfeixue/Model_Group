@@ -246,8 +246,15 @@ async function onLogin() {
   loading.value = true
   try {
     const { data } = await login({ username: form.username, password: form.password })
-    const payload = JSON.parse(atob(data.access_token.split('.')[1]))
-    const user = { user_id: Number(payload.sub), username: form.username, role: data.role }
+    // 兼容标准 JWT（base64url）
+    const part = data.access_token.split('.')[1] || ''
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'))
+    const payload = JSON.parse(json)
+    const user = {
+      user_id: Number(payload.sub),
+      username: form.username,
+      role: data.role || payload.role,
+    }
     userStore.login(user, data.access_token, data.refresh_token)
     ElMessage.success('登录成功')
     router.push('/home')

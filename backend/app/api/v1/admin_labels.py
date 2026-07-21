@@ -25,6 +25,30 @@ _admin = Depends(require_role("admin"))
 # ──── /api/admin/schemas ────
 
 
+@router.get("/admin/schemas", dependencies=[_admin])
+def list_schemas(
+    db: Session = Depends(get_db),
+):
+    """列出全部标签体系（管理员）。"""
+    from app.models.label_schema import LabelSchema
+
+    rows = db.query(LabelSchema).order_by(LabelSchema.schema_id.asc()).all()
+    items = []
+    for s in rows:
+        cats = s.categories if isinstance(s.categories, list) else []
+        items.append(
+            {
+                "schema_id": s.schema_id,
+                "name": s.name,
+                "category_count": len(cats),
+                "categories": cats,
+                "created_at": s.created_at,
+                "updated_at": getattr(s, "updated_at", None),
+            }
+        )
+    return {"items": items, "total": len(items)}
+
+
 @router.post(
     "/admin/schemas",
     response_model=LabelSchemaResponse,

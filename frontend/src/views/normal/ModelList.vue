@@ -14,19 +14,19 @@
   <div class="stats">
     <div class="stat-card">
         <div class="icon">🧠</div>
-        <h2>{{ models.length }}</h2>
+        <h2>{{ filteredModels.length }}</h2>
         <span>模型总数</span>
     </div>
 
     <div class="stat-card">
         <div class="icon">🚀</div>
-        <h2>{{ models.filter(m=>m.status==='available').length }}</h2>
+        <h2>{{ filteredModels.filter(m=>m.status==='available').length }}</h2>
         <span>可用模型</span>
     </div>
 
     <div class="stat-card">
         <div class="icon">⚡</div>
-        <h2>{{ models.filter(m=>m.framework==='pytorch').length }}</h2>
+        <h2>{{ filteredModels.filter(m=>m.framework==='pytorch').length }}</h2>
         <span>PyTorch模型</span>
     </div>
   </div>
@@ -56,8 +56,8 @@
     </div>
   </div>
 
-  <div class="table-card">
-    <el-table :data="models" stripe>
+  <div class="table-card" v-loading="loading">
+    <el-table :data="filteredModels" stripe>
       <el-table-column prop="name" label="模型名称" min-width="260" header-align="left" align="left"/><el-table-column prop="framework" label="框架" width="120" header-align="center" align="center"/>
       <el-table-column prop="status" label="状态" width="120" header-align="center" align="center"><template #default="{row}"><el-tag
         :type="row.status==='available'?'success':'info'"
@@ -66,70 +66,138 @@
         >
         {{row.status}}
         </el-tag></template></el-table-column>
-      <el-table-column label="操作" width="300" header-align="center" align="center"><template #default="{row}">
-        <el-button
-          plain
-          size="small"
-          >
-          详情
-          </el-button>
-
-          <el-button
-          type="success"
-          size="small"
-          plain
-          >
-          训练
-          </el-button>
-
-          <el-button
-          type="warning"
-          size="small"
-          plain
-          >
-          推理
-          </el-button>
-
-          <el-button
-          type="danger"
-          size="small"
-          plain
-          >
-          评测
-          </el-button>
+      <el-table-column label="操作" width="320" header-align="center" align="center"><template #default="{row}">
+        <el-button plain size="small" @click="goDetail(row)">详情</el-button>
+        <el-button type="success" size="small" plain @click="goTrain(row)">训练</el-button>
+        <el-button type="warning" size="small" plain @click="goInfer(row)">推理</el-button>
+        <el-button type="danger" size="small" plain @click="goEval(row)">评测</el-button>
       </template></el-table-column>
     </el-table>
   </div>
 
-  <el-dialog v-model="uploadVisible" title="🧠 上传模型" width="620px">
+  <el-dialog v-model="uploadVisible" title="上传模型" width="620px">
     <el-form :model="uploadForm" label-position="top">
       <el-form-item label="模型名称"><el-input v-model="uploadForm.name" /></el-form-item>
       <el-form-item label="框架"><el-select v-model="uploadForm.framework"><el-option label="PyTorch" value="pytorch" /><el-option label="ONNX" value="onnx" /></el-select></el-form-item>
-      <el-form-item label="骨干网络"><el-input v-model="uploadForm.backbone" placeholder="如 ResNet50" /></el-form-item>
+      <el-form-item label="模态 modalities"><el-input v-model="uploadForm.modalities" placeholder="visible 或 visible,infrared" /></el-form-item>
+      <el-form-item label="类别 categories"><el-input v-model="uploadForm.categories" placeholder="pole,bridge" /></el-form-item>
       <el-form-item label="输入尺寸"><el-input v-model="uploadForm.inputSize" placeholder="640x640" /></el-form-item>
-      <el-form-item label="模型文件"><el-button @click="onMockUpload">选择文件（Mock）</el-button></el-form-item>
+      <el-form-item label="模型文件">
+        <input type="file" accept=".pt,.pth,.onnx" @change="onPickFile" />
+        <div v-if="fileRef" style="margin-top:8px;color:#64748b;font-size:13px">{{ fileRef.name }}</div>
+      </el-form-item>
     </el-form>
-    <template #footer><el-button @click="uploadVisible=false">取消</el-button><el-button type="primary" @click="onSubmit">确认上传</el-button></template>
+    <template #footer>
+      <el-button @click="uploadVisible=false">取消</el-button>
+      <el-button type="primary" :loading="uploading" @click="onSubmit">确认上传</el-button>
+    </template>
   </el-dialog>
 </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { getMyModels, registerModel } from '@/api/model'
+
 const router = useRouter()
 const filter = ref('')
+const loading = ref(false)
 const uploadVisible = ref(false)
-const uploadForm = reactive({ name:'', framework:'pytorch', backbone:'', inputSize:'640x640' })
-const models = ref([
-  { model_id:1, name:'YOLOv8-低光增强', framework:'pytorch', status:'available', created_at:'2024-05-10' },
-  { model_id:2, name:'Faster R-CNN ResNet-50', framework:'pytorch', status:'available', created_at:'2024-06-02' },
-  { model_id:3, name:'DETR-多模态', framework:'onnx', status:'available', created_at:'2024-06-20' },
-])
-function onMockUpload(){ ElMessage.info('Mock：文件已选择') }
-function onSubmit(){ uploadVisible.value = false; ElMessage.success('模型已上传（Mock）') }
-function onEval(row){ router.push('/eval?model='+row.model_id) }
+const uploading = ref(false)
+const uploadForm = reactive({
+  name: '',
+  framework: 'onnx',
+  modalities: 'visible',
+  categories: 'pole,bridge',
+  inputSize: '640x640',
+})
+const fileRef = ref(null)
+const models = ref([])
+const total = ref(0)
+
+const filteredModels = computed(() => {
+  if (!filter.value) return models.value
+  return models.value.filter((m) => m.framework === filter.value)
+})
+
+async function fetchModels() {
+  loading.value = true
+  try {
+    const params = { page: 1, size: 100 }
+    if (filter.value) params.framework = filter.value
+    const { data } = await getMyModels(params)
+    models.value = data.items || []
+    total.value = data.total ?? models.value.length
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '加载模型列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function onPickFile(e) {
+  fileRef.value = e.target.files?.[0] || null
+}
+
+async function onSubmit() {
+  if (!uploadForm.name.trim()) {
+    ElMessage.warning('请填写模型名称')
+    return
+  }
+  if (!fileRef.value) {
+    ElMessage.warning('请选择权重文件')
+    return
+  }
+  const sizeParts = String(uploadForm.inputSize).toLowerCase().split(/[x×]/)
+  const h = parseInt(sizeParts[0], 10) || 640
+  const w = parseInt(sizeParts[1], 10) || h
+  const metadata = {
+    input_size: [h, w],
+    modalities: String(uploadForm.modalities || 'visible')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    categories: String(uploadForm.categories || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  }
+  const fd = new FormData()
+  fd.append('file', fileRef.value)
+  fd.append('name', uploadForm.name.trim())
+  fd.append('framework', uploadForm.framework)
+  fd.append('metadata', JSON.stringify(metadata))
+  uploading.value = true
+  try {
+    await registerModel(fd)
+    ElMessage.success('模型注册成功')
+    uploadVisible.value = false
+    fileRef.value = null
+    await fetchModels()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '上传失败')
+  } finally {
+    uploading.value = false
+  }
+}
+
+function goDetail(row) {
+  router.push(`/models/${row.model_id}`)
+}
+function goTrain(row) {
+  router.push({ path: '/train', query: { model_id: row.model_id } })
+}
+function goInfer(row) {
+  router.push({ path: '/infer/0', query: { model_id: row.model_id } })
+}
+function goEval(row) {
+  router.push({ path: '/eval', query: { model_id: row.model_id } })
+}
+
+watch(filter, fetchModels)
+onMounted(fetchModels)
 </script>
 
 <style scoped>

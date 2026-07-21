@@ -2,11 +2,12 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.models.data_resource import DataResource
 from app.models.user import User
 from app.schemas.data_resource import (
     AlignmentRequest,
@@ -138,3 +139,73 @@ def align_data(
         user_id=current_user.user_id,
     )
     return AlignmentResponse(**result)
+
+
+@router.get("/data/resources/{resource_id}", response_model=DataResourceResponse)
+def get_data_resource(
+    resource_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """单条数据资源详情（前端 DataDetail 使用）"""
+    resource = db.get(DataResource, resource_id)
+    if resource is None:
+        raise HTTPException(status_code=404, detail="资源不存在")
+    if (
+        resource.owner_id != current_user.user_id
+        and current_user.role != "admin"
+    ):
+        raise HTTPException(status_code=403, detail="无权查看该资源")
+    return DataResourceResponse.model_validate(resource)
+
+
+@router.get("/images/{resource_id}")
+def get_image(resource_id: int, db: Session = Depends(get_db)):
+    """根据 resource_id 返回图片二进制"""
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    from minio import Minio
+    from app.core.config import settings as s
+
+    resource = db.get(DataResource, resource_id)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    client = Minio(endpoint=s.MINIO_ENDPOINT, access_key=s.MINIO_ACCESS_KEY,
+                   secret_key=s.MINIO_SECRET_KEY, secure=s.MINIO_SECURE)
+    try:
+        path = resource.file_path.lstrip("/")
+        parts = path.split("/", 1)
+        data = client.get_object(parts[0], parts[1])
+        return StreamingResponse(data.stream(), media_type="image/jpeg")
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+
+@router.get("/images/{resource_id}/thumbnail")
+def get_thumbnail(resource_id: int, size: int = 240, db: Session = Depends(get_db)):
+    """根据 resource_id 返回缩略图"""
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    from minio import Minio
+    from PIL import Image as PILImage
+    from app.core.config import settings as s
+
+    resource = db.get(DataResource, resource_id)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    client = Minio(endpoint=s.MINIO_ENDPOINT, access_key=s.MINIO_ACCESS_KEY,
+                   secret_key=s.MINIO_SECRET_KEY, secure=s.MINIO_SECURE)
+    try:
+        path = resource.file_path.lstrip("/")
+        parts = path.split("/", 1)
+        data = client.get_object(parts[0], parts[1])
+        img = PILImage.open(BytesIO(data.read()))
+        img.thumbnail((size, size))
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="image/jpeg")
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found")

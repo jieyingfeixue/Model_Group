@@ -1,12 +1,131 @@
-<template><div class="page"><h2>数据集审核</h2>
-<el-table :data="items"><el-table-column prop="name" label="数据集"/><el-table-column prop="uploader" label="提交者"/><el-table-column prop="modality" label="模态"/><el-table-column prop="status" label="状态"/><el-table-column label="操作" width="200"><template #default="{row}"><el-button size="small" @click="onClaim(row)" v-if="row.status==='submitted'">认领</el-button><el-button size="small" type="success" @click="onReview(row,'approved')" v-if="row.status==='reviewing'">通过</el-button><el-button size="small" type="danger" @click="onReview(row,'rejected')" v-if="row.status==='reviewing'">驳回</el-button></template></el-table-column></el-table>
-<el-dialog v-model="detailVisible" title="15项检查清单" width="700px"><el-table :data="checklist"><el-table-column prop="id" label="编号" width="60"/><el-table-column prop="name" label="检查项" width="200"/><el-table-column prop="method" label="方式" width="100"/><el-table-column label="结果" width="150"><template #default="{row}"><el-radio-group v-model="row.result" size="small"><el-radio value="pass">通过</el-radio><el-radio value="na">不适用</el-radio><el-radio value="fail">存在问题</el-radio></el-radio-group></template></el-table-column></el-table><template #footer><el-button @click="detailVisible=false">取消</el-button><el-button type="primary" @click="onSubmitReview">提交审核</el-button></template></el-dialog>
-</div></template>
-<script setup>import {ref,reactive} from 'vue';import {ElMessage} from 'element-plus'
-const items=ref([{id:1,name:'可见光城市道路 v1',uploader:'user1',modality:'可见光',status:'submitted'},{id:2,name:'红外夜间场景 v2',uploader:'user2',modality:'红外',status:'reviewing'}])
-const detailVisible=ref(false);const checklist=reactive([{id:'A1',name:'文件格式合法性',method:'系统自动',result:'pass'},{id:'A2',name:'数据完整性',method:'人工判断',result:'pass'},{id:'A3',name:'图片质量',method:'人工判断',result:'pass'},{id:'A4',name:'标注状态标记准确性',method:'人工判断',result:'pass'},{id:'A5',name:'数据去重',method:'系统自动',result:'pass'},{id:'A6',name:'标签合法性',method:'系统自动',result:'pass'},{id:'A7',name:'标注框规范性',method:'系统自动',result:'pass'},{id:'A8',name:'深度值合理性',method:'系统自动',result:'pass'},{id:'A9',name:'元信息完整性',method:'系统自动',result:'pass'},{id:'A10',name:'数据集描述一致性',method:'人工判断',result:'pass'},{id:'A11',name:'命名规范',method:'系统自动',result:'pass'},{id:'A12',name:'数据脱敏',method:'人工判断',result:'pass'},{id:'A13',name:'多模态对齐检查',method:'人工判断',result:'na'},{id:'A14',name:'帧对齐/补齐合理性',method:'人工判断',result:'na'},{id:'A15',name:'标注深度来源标注',method:'人工判断',result:'pass'}])
-function onClaim(row){row.status='reviewing';detailVisible.value=true;ElMessage.success('已认领')}
-function onReview(row,verdict){row.status=verdict;ElMessage.success(verdict==='approved'?'已通过':'已驳回')}
-function onSubmitReview(){detailVisible.value=false;items.value[1].status='approved';ElMessage.success('审核完成')}
+<template>
+  <div class="page">
+    <h2>数据集审核</h2>
+    <div class="card" v-loading="loading">
+      <el-table :data="items">
+        <el-table-column prop="name" label="数据集" />
+        <el-table-column prop="owner_id" label="提交者 ID" width="100" />
+        <el-table-column prop="version" label="版本" width="80" />
+        <el-table-column prop="review_status" label="审核状态" width="120" />
+        <el-table-column prop="status" label="数据集状态" width="120" />
+        <el-table-column label="操作" width="280">
+          <template #default="{ row }">
+            <el-button size="small" @click="onClaim(row)" v-if="row.review_status==='submitted'">认领</el-button>
+            <el-button size="small" @click="onOpenChecklist(row)">检查清单</el-button>
+            <el-button size="small" type="success" @click="onReview(row,'approved')">通过</el-button>
+            <el-button size="small" type="danger" @click="onReview(row,'rejected')">驳回</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <el-dialog v-model="detailVisible" title="系统检查清单" width="720px">
+      <el-table :data="checklistItems" v-loading="checklistLoading">
+        <el-table-column prop="id" label="编号" width="80" />
+        <el-table-column prop="name" label="检查项" />
+        <el-table-column prop="result" label="结果" width="120" />
+        <el-table-column prop="detail" label="说明" />
+      </el-table>
+      <template #footer>
+        <el-button @click="detailVisible=false">关闭</el-button>
+        <el-button type="success" @click="onReview(current,'approved')">通过</el-button>
+        <el-button type="danger" @click="onReview(current,'rejected')">驳回</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  getPendingDatasets,
+  claimDatasetReview,
+  getChecklist,
+  reviewDataset,
+} from '@/api/review'
+
+const items = ref([])
+const loading = ref(false)
+const detailVisible = ref(false)
+const checklistLoading = ref(false)
+const checklistItems = ref([])
+const current = ref(null)
+
+async function fetchList() {
+  loading.value = true
+  try {
+    const { data } = await getPendingDatasets({ page: 1, size: 50 })
+    items.value = data.items || []
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '加载待审列表失败（需 reviewer/admin）')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function onClaim(row) {
+  try {
+    await claimDatasetReview(row.dataset_id)
+    ElMessage.success('已认领')
+    await fetchList()
+    await onOpenChecklist(row)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '认领失败')
+  }
+}
+
+async function onOpenChecklist(row) {
+  current.value = row
+  detailVisible.value = true
+  checklistLoading.value = true
+  try {
+    const { data } = await getChecklist(row.dataset_id)
+    const list = data.items || data.checklist || data.results || []
+    checklistItems.value = Array.isArray(list)
+      ? list.map((x, i) => ({
+          id: x.id || x.code || `C${i + 1}`,
+          name: x.name || x.title || x.check_item || JSON.stringify(x),
+          result: x.result || x.status || '-',
+          detail: x.detail || x.message || x.note || '',
+        }))
+      : Object.entries(data).map(([k, v]) => ({
+          id: k,
+          name: k,
+          result: typeof v === 'object' ? (v.result || '-') : String(v),
+          detail: typeof v === 'object' ? JSON.stringify(v) : '',
+        }))
+  } catch (e) {
+    checklistItems.value = []
+    ElMessage.error(e?.response?.data?.detail || '获取检查清单失败')
+  } finally {
+    checklistLoading.value = false
+  }
+}
+
+async function onReview(row, result) {
+  if (!row) return
+  try {
+    if (result === 'rejected') {
+      const { value } = await ElMessageBox.prompt('请输入驳回备注', '驳回', {
+        inputPlaceholder: 'notes',
+      })
+      await reviewDataset(row.dataset_id, { result, notes: value })
+    } else {
+      await reviewDataset(row.dataset_id, { result })
+    }
+    ElMessage.success(result === 'approved' ? '已通过' : '已驳回')
+    detailVisible.value = false
+    await fetchList()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.detail || '裁决失败')
+  }
+}
+
+onMounted(fetchList)
 </script>
-<style scoped>.page{padding:24px;max-width:1200px;margin:0 auto}</style>
+
+<style scoped>
+.page{padding:24px;max-width:1200px;margin:0 auto}
+.card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+</style>

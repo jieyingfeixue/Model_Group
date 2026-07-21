@@ -74,6 +74,18 @@ def get_progress(
     return AnnotationProgressResponse(**result)
 
 
+@router.get("/annotation/tasks/{task_id}/next")
+def get_next_image(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取下一张待标注图片。"""
+    return normal_annotation_service.get_next_image(
+        db, task_id=task_id, user_id=current_user.user_id
+    )
+
+
 # ──── /api/annotation/images/{id}/* ────
 
 
@@ -137,6 +149,28 @@ def submit_annotation(
         db,
         task_id=task_id,
         resource_id=resource_id,
+        user_id=current_user.user_id,
+    )
+    return AnnotationResponse.model_validate(annotation)
+
+
+@router.post(
+    "/annotation/images/{resource_id}/rollback",
+    response_model=AnnotationResponse,
+)
+def rollback_annotation(
+    resource_id: int,
+    task_id: int = Query(..., description="标注任务 ID"),
+    version: int = Query(..., description="要回滚到的历史版本号"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """回滚到指定历史版本（另存为新版本）。"""
+    annotation = normal_annotation_service.rollback_annotation(
+        db,
+        task_id=task_id,
+        resource_id=resource_id,
+        version=version,
         user_id=current_user.user_id,
     )
     return AnnotationResponse.model_validate(annotation)

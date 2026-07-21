@@ -1,11 +1,102 @@
-<template><div class="page"><h2>天梯榜管理</h2>
-<div class="card"><h3>试卷锁定</h3><el-select v-model="lockedDataset" placeholder="选择标准测试集" style="width:300px"><el-option label="低空障碍物检测 v1.0" :value="1"/></el-select><el-button type="warning" @click="onLock" style="margin-left:12px">锁定试卷（GT隐藏）</el-button></div>
-<div class="card"><h3>作弊注销</h3><el-table :data="cheatLogs"><el-table-column prop="model" label="模型"/><el-table-column prop="score" label="异常分数"/><el-table-column prop="reason" label="原因"/><el-table-column label="操作"><template #default="{row}"><el-button size="small" type="danger" @click="onInvalidate(row)">注销跑分</el-button></template></el-table-column></el-table></div>
-<div class="card"><h3>指标权重调整</h3><p>夜间场景mAP权重: <el-slider v-model="nightWeight" :min="0" :max="1" :step="0.1" show-input style="width:300px"/></p><p>FPS权重: <el-slider v-model="fpsWeight" :min="0" :max="1" :step="0.1" show-input style="width:300px"/></p><el-button type="primary" @click="onUpdateWeights">保存权重</el-button></div></div></template>
-<script setup>import {ref} from 'vue';import {ElMessage} from 'element-plus';const lockedDataset=ref(null);const nightWeight=ref(0.3);const fpsWeight=ref(0.1)
-const cheatLogs=ref([{model:'SuspiciousModel-v3',score:0.998,reason:'分数异常偏高，疑似绕过评测接口'}])
-function onLock(){ElMessage.success('试卷已锁定，GT已对普通用户隐藏')}
-function onInvalidate(row){ElMessage.success('跑分已注销，已通知用户')}
-function onUpdateWeights(){ElMessage.success('权重已更新')}
+<template>
+  <div class="page">
+    <h2>天梯榜管理</h2>
+    <div class="card">
+      <h3>公开排行榜</h3>
+      <el-form inline>
+        <el-form-item label="数据集 ID">
+          <el-input-number v-model="datasetId" :min="1" />
+        </el-form-item>
+        <el-button type="primary" :loading="loading" @click="loadBoard">刷新排行榜</el-button>
+      </el-form>
+      <el-table :data="rows" style="margin-top:12px">
+        <el-table-column prop="rank" label="排名" width="70" />
+        <el-table-column prop="result_id" label="Result ID" width="100" />
+        <el-table-column prop="model_id" label="模型 ID" width="90" />
+        <el-table-column prop="name" label="模型" />
+        <el-table-column prop="map50" label="mAP@0.5" width="110" />
+        <el-table-column label="操作" width="200">
+          <template #default="{ row }">
+            <el-button size="small" type="danger" @click="onInvalidate(row)" :disabled="!row.result_id">下架</el-button>
+            <el-button size="small" type="success" @click="onPublish(row)" :disabled="!row.result_id">发布</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+    <div class="card">
+      <h3>按 Result ID 操作</h3>
+      <el-input-number v-model="manualResultId" :min="1" />
+      <el-button type="danger" style="margin-left:12px" @click="onInvalidate({ result_id: manualResultId })">注销跑分</el-button>
+      <el-button type="success" style="margin-left:8px" @click="onPublish({ result_id: manualResultId })">纳入天梯</el-button>
+      <p class="hint">试卷锁定 / 权重调整等接口后端尚未实现，已从页面移除 Mock。</p>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { getLeaderboard } from '@/api/eval'
+import { invalidateResult, publishEvalResult } from '@/api/admin'
+
+const datasetId = ref(1)
+const manualResultId = ref(1)
+const loading = ref(false)
+const rows = ref([])
+
+function pick(obj, ...keys) {
+  for (const k of keys) if (obj?.[k] != null) return obj[k]
+  return null
+}
+
+async function loadBoard() {
+  loading.value = true
+  try {
+    const { data } = await getLeaderboard({ dataset_id: datasetId.value })
+    const list = data.items || data.leaderboard || (Array.isArray(data) ? data : [])
+    rows.value = list.map((r, i) => {
+      const m = r.overall_metrics || r.metrics || r
+      return {
+        rank: r.rank ?? i + 1,
+        result_id: r.result_id,
+        model_id: r.model_id,
+        name: r.name || r.model_name || `model_${r.model_id || i + 1}`,
+        map50: pick(m, 'map50', 'mAP@0.5', 'mAP', 'map') ?? '-',
+      }
+    })
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function onInvalidate(row) {
+  if (!row?.result_id) return
+  try {
+    await invalidateResult(row.result_id)
+    ElMessage.success('已下架')
+    await loadBoard()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '下架失败')
+  }
+}
+
+async function onPublish(row) {
+  if (!row?.result_id) return
+  try {
+    await publishEvalResult(row.result_id)
+    ElMessage.success('已发布到天梯')
+    await loadBoard()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '发布失败')
+  }
+}
 </script>
-<style scoped>.page{padding:24px;max-width:1000px;margin:0 auto}.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}h3{margin-bottom:12px}</style>
+
+<style scoped>
+.page{padding:24px;max-width:1000px;margin:0 auto}
+.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+h3{margin-bottom:12px}
+.hint{margin-top:12px;color:#94a3b8;font-size:13px}
+</style>

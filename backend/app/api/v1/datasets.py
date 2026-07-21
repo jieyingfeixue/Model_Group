@@ -540,8 +540,39 @@ def batch_archive(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 数据集市场
+# 我的数据集 / 数据集市场
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+@router.get("/datasets/mine")
+def list_my_datasets(
+    status: str | None = None,
+    page: int = 1,
+    size: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """列出当前用户拥有的数据集（含私有/草稿），供「我的数据集」与训练/评测下拉使用。"""
+    from app.models.dataset_item import DatasetItem
+
+    rows = Dataset.get_by_owner(db, current_user.user_id)
+    if status:
+        rows = [d for d in rows if d.status == status]
+    total = len(rows)
+    start = max(0, (page - 1) * size)
+    page_rows = rows[start : start + size]
+    items = []
+    for d in page_rows:
+        counts = DatasetItem.count_by_subset(db, d.dataset_id)
+        sample_count = sum(counts.values())
+        items.append(
+            {
+                **DatasetResponse.model_validate(d).model_dump(),
+                "sample_count": sample_count,
+                "subset_counts": counts,
+            }
+        )
+    return {"items": items, "total": total, "page": page, "size": size}
 
 
 @router.get("/datasets")

@@ -1,13 +1,148 @@
-<template><div class="page"><h2>评测报告</h2>
-<div class="metrics-row"><div class="metric-card"><span class="val">0.723</span><span class="lbl">mAP@0.5</span></div><div class="metric-card"><span class="val">0.518</span><span class="lbl">mAP@0.5:0.95</span></div><div class="metric-card"><span class="val">0.81</span><span class="lbl">Precision</span></div><div class="metric-card"><span class="val">0.68</span><span class="lbl">Recall</span></div></div>
-<div class="card"><h3>PR 曲线</h3><PrCurve :data="prData"/></div>
-<div class="card"><h3>混淆矩阵</h3><ConfusionMatrix :data="matrix" :labels="labels"/></div>
-<div class="card"><h3>分类别 AP</h3><BarChart title="各类别 AP" :labels="labels" :values="perClass"/></div>
-<div class="card"><h3>分场景评测</h3><BarChart title="分场景 mAP" :labels="['白天','夜间','雨天']" :values="[0.75,0.62,0.58]"/></div>
-<div class="card"><h3>错误样本</h3><el-tabs><el-tab-pane label="漏检(FN)"><p v-for="i in 3" :key="i">样本 #{{i}}: 图像可见光_000{{i}}.jpg — 未检测到障碍物</p></el-tab-pane><el-tab-pane label="误检(FP)"><p v-for="i in 3" :key="i">样本 #{{i+3}}: 图像可见光_000{{i+3}}.jpg — 误检为障碍物</p></el-tab-pane></el-tabs></div>
-</div></template>
-<script setup>import PrCurve from '@/components/charts/PrCurve.vue';import ConfusionMatrix from '@/components/charts/ConfusionMatrix.vue';import BarChart from '@/components/charts/BarChart.vue'
-const labels=['电线杆','桥梁','建筑物','树木','路灯'];const perClass=[0.82,0.71,0.65,0.78,0.66]
-const prData=labels.map((n,i)=>({name:n,points:Array.from({length:20},(_,j)=>{const r=(j+1)/20;return[r,(0.9-i*0.05)*(1-r*r*0.6)]})}))
-const matrix=[[45,2,1,0,1],[1,38,3,1,0],[0,2,32,3,1],[1,0,2,40,2],[0,1,0,1,35]]</script>
-<style scoped>.page{padding:24px;max-width:1200px;margin:0 auto}.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}.metric-card{background:#fff;border-radius:8px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.04)}.val{display:block;font-size:28px;font-weight:700;color:#1a1a2e}.lbl{font-size:13px;color:#6b7280}.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}h3{margin-bottom:12px}</style>
+<template>
+  <div class="page" v-loading="loading">
+    <h2>评测报告 #{{ taskId }}</h2>
+    <p v-if="status" class="status">状态：<el-tag>{{ status }}</el-tag></p>
+
+    <div class="metrics-row">
+      <div class="metric-card">
+        <span class="val">{{ fmt(overall.map50 ?? overall['mAP@0.5'] ?? overall.mAP) }}</span>
+        <span class="lbl">mAP@0.5</span>
+      </div>
+      <div class="metric-card">
+        <span class="val">{{ fmt(overall.map ?? overall['mAP@0.5:0.95'] ?? overall.mAP50_95) }}</span>
+        <span class="lbl">mAP@0.5:0.95</span>
+      </div>
+      <div class="metric-card">
+        <span class="val">{{ fmt(overall.precision ?? overall.Precision) }}</span>
+        <span class="lbl">Precision</span>
+      </div>
+      <div class="metric-card">
+        <span class="val">{{ fmt(overall.recall ?? overall.Recall) }}</span>
+        <span class="lbl">Recall</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>原始指标 JSON</h3>
+      <pre class="raw">{{ JSON.stringify(metrics || {}, null, 2) }}</pre>
+    </div>
+
+    <div class="card" v-if="prData.length">
+      <h3>PR 曲线</h3>
+      <PrCurve :data="prData" />
+    </div>
+
+    <div class="card" v-if="matrix.length">
+      <h3>混淆矩阵</h3>
+      <ConfusionMatrix :data="matrix" :labels="labels" />
+    </div>
+
+    <div class="card" v-if="perClassValues.length">
+      <h3>分类别 AP</h3>
+      <BarChart title="各类别 AP" :labels="labels" :values="perClassValues" />
+    </div>
+
+    <div class="card" v-if="errors.length">
+      <h3>错误样本</h3>
+      <el-tabs>
+        <el-tab-pane label="样本">
+          <p v-for="(e, i) in errors" :key="i">{{ summarizeError(e) }}</p>
+        </el-tab-pane>
+      </el-tabs>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import PrCurve from '@/components/charts/PrCurve.vue'
+import ConfusionMatrix from '@/components/charts/ConfusionMatrix.vue'
+import BarChart from '@/components/charts/BarChart.vue'
+import {
+  getEvalStatus,
+  getEvalMetrics,
+  getPRCurve,
+  getConfusionMatrix,
+  getErrorSamples,
+} from '@/api/eval'
+
+const route = useRoute()
+const taskId = computed(() => Number(route.params.taskId))
+const loading = ref(false)
+const status = ref('')
+const metrics = ref(null)
+const prData = ref([])
+const matrix = ref([])
+const labels = ref([])
+const perClassValues = ref([])
+const errors = ref([])
+
+const overall = computed(() => metrics.value?.overall_metrics || {})
+
+function fmt(v) {
+  if (v == null || Number.isNaN(Number(v))) return '-'
+  return Number(v).toFixed(3)
+}
+
+function summarizeError(e) {
+  if (typeof e === 'string') return e
+  return JSON.stringify(e)
+}
+
+async function load() {
+  if (!taskId.value) return
+  loading.value = true
+  try {
+    const st = await getEvalStatus(taskId.value)
+    status.value = st.data.status
+    if (st.data.status === 'completed') {
+      const m = await getEvalMetrics(taskId.value)
+      metrics.value = m.data
+      const pcs = m.data.per_class_metrics || []
+      if (pcs.length) {
+        labels.value = pcs.map((c, i) => c.class_name || c.name || `class_${c.class_id ?? i}`)
+        perClassValues.value = pcs.map((c) => Number(c.ap ?? c.AP ?? c.map ?? 0))
+      }
+    }
+    try {
+      const pr = await getPRCurve(taskId.value, 0)
+      const curves = pr.data?.curves || pr.data?.data || pr.data
+      if (Array.isArray(curves)) {
+        prData.value = curves.map((c, i) => ({
+          name: c.name || labels.value[i] || `class_${i}`,
+          points: c.points || c,
+        }))
+      }
+    } catch { /* optional */ }
+    try {
+      const cm = await getConfusionMatrix(taskId.value)
+      matrix.value = cm.data?.matrix || cm.data || []
+      if (cm.data?.labels?.length) labels.value = cm.data.labels
+    } catch { /* optional */ }
+    try {
+      const er = await getErrorSamples(taskId.value, { page: 1, size: 20 })
+      errors.value = er.data?.items || er.data?.errors || (Array.isArray(er.data) ? er.data : [])
+    } catch { /* optional */ }
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '加载评测报告失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(load)
+</script>
+
+<style scoped>
+.page{padding:24px;max-width:1200px;margin:0 auto}
+.status{margin-bottom:16px;color:#64748b}
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+.metric-card{background:#fff;border-radius:8px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.val{display:block;font-size:28px;font-weight:700;color:#1a1a2e}
+.lbl{font-size:13px;color:#6b7280}
+.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+h3{margin-bottom:12px}
+.raw{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-size:12px;overflow:auto;max-height:360px}
+</style>
