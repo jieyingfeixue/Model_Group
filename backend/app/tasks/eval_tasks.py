@@ -1,22 +1,19 @@
-"""评测异步任务 — Phase1 占位：写入模拟指标，Phase3 再接 pycocotools / MetricsEngine"""
+"""评测异步任务 — Phase3：真推理 + MetricsEngine。"""
 
 from __future__ import annotations
 
-import time
 from datetime import datetime
 
 from app.core.database import SessionLocal
 from app.models.eval_result import EvalResult
 from app.models.eval_task import EvalTask
+from app.services import eval_runtime
 from app.tasks.celery_app import celery_app
 
 
 @celery_app.task(name="tasks.eval.run", bind=True)
 def run_eval_task(self, eval_task_id: int) -> dict:
-    """评测任务占位 Worker。
-
-    流程：queued → running → 写入 mock EvalResult → completed
-    """
+    """评测 Worker：dataset 推理 → GT 对齐 → 写 EvalResult。"""
     db = SessionLocal()
     try:
         task = db.query(EvalTask).filter(EvalTask.task_id == eval_task_id).first()
@@ -28,43 +25,43 @@ def run_eval_task(self, eval_task_id: int) -> dict:
         task.save(db)
         db.commit()
 
-        time.sleep(1)
+        metrics = eval_runtime.run_eval_pipeline(
+            db,
+            model_id=task.model_id,
+            dataset_id=task.dataset_id,
+            metric_config=task.metric_config or {},
+        )
 
-        overall = {
-            "mAP50": 0.72,
-            "mAP50_95": 0.45,
-            "precision": 0.81,
-            "recall": 0.68,
-            "f1": 0.74,
-            "fps": 42.5,
-            "note": "phase1 placeholder — replace with pycocotools in phase3",
-        }
-
+        is_public = bool((task.metric_config or {}).get("is_public", False))
         existing = EvalResult.get_by_task(db, eval_task_id)
+        payload = {
+            "overall_metrics": metrics.get("overall_metrics") or {},
+            "per_class_metrics": metrics.get("per_class_metrics"),
+            "per_size_metrics": metrics.get("per_size_metrics"),
+            "per_scene_metrics": metrics.get("per_scene_metrics") or {},
+            "pr_curve_data": metrics.get("pr_curve_data"),
+            "confusion_matrix": metrics.get("confusion_matrix"),
+            "error_samples": metrics.get("error_samples"),
+            "is_public": is_public,
+        }
+        # 把 labels 塞进 pr_curve_data 旁路字段，供 confusion API 使用
+        pr = dict(payload["pr_curve_data"] or {})
+        pr["confusion_labels"] = metrics.get("confusion_labels") or []
+        pr["infer_summary"] = metrics.get("infer_summary") or {}
+        payload["pr_curve_data"] = pr
+
         if existing is None:
             EvalResult.create(
                 db,
                 task_id=eval_task_id,
                 model_id=task.model_id,
                 dataset_id=task.dataset_id,
-                overall_metrics=overall,
-                per_class_metrics=[
-                    {"category_id": 1, "name": "电线杆", "ap50": 0.80},
-                    {"category_id": 2, "name": "桥梁", "ap50": 0.65},
-                ],
-                per_size_metrics={"small": 0.31, "medium": 0.55, "large": 0.70},
-                per_scene_metrics={"daytime": 0.74, "night": 0.58},
-                pr_curve_data={
-                    "points": [[0.0, 1.0], [0.1, 0.95], [0.5, 0.7], [1.0, 0.0]]
-                },
-                confusion_matrix=[[10, 1], [2, 8]],
-                error_samples={
-                    "fp": [],
-                    "fn": [],
-                    "tp": [],
-                },
-                is_public=False,
+                **payload,
             )
+        else:
+            for k, v in payload.items():
+                setattr(existing, k, v)
+            existing.save(db)
         db.commit()
 
         task = db.query(EvalTask).filter(EvalTask.task_id == eval_task_id).first()
@@ -84,6 +81,6 @@ def run_eval_task(self, eval_task_id: int) -> dict:
             task.finished_at = datetime.utcnow()
             task.save(db)
             db.commit()
-        raise
+        return {"ok": False, "status": "failed", "error": str(exc)}
     finally:
         db.close()

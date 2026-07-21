@@ -14,3 +14,11 @@ python-dotenv==1.0.1
 minio==7.2.7
 Pillow==10.4.0
 celery[redis]==5.4.0
+# 模型侧 Phase2/3：训练执行 / ONNX 推理 / 评测
+docker==7.1.0
+numpy==1.26.4
+onnxruntime==1.19.2
+pycocotools==2.0.7
+# 可选：.pt → ONNX
+# ultralytics>=8.0.0
+# torch>=2.0.0

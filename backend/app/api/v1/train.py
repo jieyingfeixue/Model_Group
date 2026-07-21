@@ -26,6 +26,7 @@ def submit_train(
         config=body.config,
         gpu_config=body.gpu_config,
         user_id=current_user.user_id,
+        model_version_id=body.model_version_id,
     )
     return TrainTaskResponse.model_validate(task)
 
@@ -36,7 +37,7 @@ def enqueue_train(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Phase1 辅助入队：投递 Celery Worker（后续由管理员审批接口替代）"""
+    """管理员手动入队 / 重试（待审任务请走 /api/admin/train-tasks/{id}/approve）"""
     task = normal_model_service.enqueue_train_task(db, task_id, current_user)
     return TrainTaskResponse.model_validate(task)
 

@@ -74,6 +74,42 @@ def get_file_url(object_path: str, expires: int = 3600) -> str:
     return _client.presigned_get_object(bucket, object_name, expires=expires)
 
 
+def download_file(object_path: str, bucket_name: str | None = None) -> bytes:
+    """从 MinIO 下载文件内容。
+
+    Args:
+        object_path: 完整路径（如 `/detection-platform/models/...`）或纯对象名
+        bucket_name: 可选桶名；未指定时从路径首段解析，否则用默认桶
+
+    Returns:
+        文件字节；不存在时抛出 FileNotFoundError
+    """
+    path = object_path.lstrip("/")
+    if bucket_name:
+        bucket = bucket_name
+        prefix = bucket + "/"
+        object_name = path[len(prefix) :] if path.startswith(prefix) else path
+    else:
+        parts = path.split("/", 1)
+        if len(parts) == 2 and parts[0] == settings.MINIO_BUCKET:
+            bucket, object_name = parts[0], parts[1]
+        elif len(parts) == 2:
+            bucket, object_name = parts[0], parts[1]
+        else:
+            bucket = settings.MINIO_BUCKET
+            object_name = path
+
+    try:
+        response = _client.get_object(bucket, object_name)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+    except S3Error as exc:
+        raise FileNotFoundError(f"MinIO 对象不存在: {bucket}/{object_name}") from exc
+
+
 def delete_file(object_path: str) -> None:
     """从 MinIO 删除文件。
 

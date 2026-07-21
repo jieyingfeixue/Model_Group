@@ -22,9 +22,18 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "detection-platform"
     MINIO_SECURE: bool = False
 
+    # ──── 训练执行（模型侧 Phase2）────
+    TRAIN_EXECUTOR: str = "docker"
+    TRAIN_IMAGE: str = "detection-train:demo"
+    TRAIN_JOBS_DIR: str = "data/train_jobs"
+    TRAIN_HOST_JOBS_DIR: str = ""
+    TRAIN_MAX_PARALLEL: int = 1
+    TRAIN_TIMEOUT_SEC: int = 3600
+    TRAIN_SLOT_KEY: str = "train:global_slot"
+
     # ──── App ────
     APP_TITLE: str = "目标检测数据与算法评测平台"
-    APP_VERSION: str = "1.0.0-alpha"
+    APP_VERSION: str = "3.0.0-rc"
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

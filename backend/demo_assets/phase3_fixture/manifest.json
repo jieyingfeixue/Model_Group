@@ -1,0 +1,38 @@
+{
+  "fixture": "phase3-eval",
+  "user": {
+    "username": "phase3_fixture",
+    "user_id": 1
+  },
+  "dataset": {
+    "dataset_id": 2,
+    "name": "phase3-eval-fixture",
+    "status": "frozen",
+    "test_count": 3
+  },
+  "resources": [
+    {
+      "resource_id": 4,
+      "name": "fixture_01.jpg"
+    },
+    {
+      "resource_id": 5,
+      "name": "fixture_02.jpg"
+    },
+    {
+      "resource_id": 6,
+      "name": "fixture_03.jpg"
+    }
+  ],
+  "model": {
+    "model_id": 4,
+    "version_id": 4,
+    "name": "phase3-fixture-model",
+    "categories": [
+      "pole",
+      "bridge"
+    ]
+  },
+  "annotation_task_id": 2,
+  "note": "占位 ONNX 无法真推理；用 smoke_phase3_pipeline.py 验 GT+指标链"
+}

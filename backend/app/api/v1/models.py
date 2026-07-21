@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.model import (
     ModelDetailResponse,
+    ModelLineageResponse,
     ModelResponse,
     ModelVersionResponse,
     ModelVisibilityRequest,
@@ -28,7 +29,7 @@ async def register_model(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """注册模型并创建初始版本"""
+    """注册模型并创建初始版本（Phase2：校验扩展名与 meta_info）"""
     meta = normal_model_service.parse_metadata_form(metadata)
     model = normal_model_service.register_model(
         db,
@@ -90,6 +91,38 @@ def get_model(
     return ModelDetailResponse(**payload)
 
 
+@router.get("/models/{model_id}/lineage", response_model=ModelLineageResponse)
+def get_model_lineage(
+    model_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """模型多版本血缘树"""
+    data = normal_model_service.get_model_lineage(db, model_id, current_user)
+    return ModelLineageResponse(
+        model_id=data["model_id"],
+        versions=[ModelVersionResponse.model_validate(v) for v in data["versions"]],
+        tree=data["tree"],
+    )
+
+
+@router.get(
+    "/models/{model_id}/versions/{version_id}",
+    response_model=ModelVersionResponse,
+)
+def get_model_version(
+    model_id: int,
+    version_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """单个版本详情"""
+    version = normal_model_service.get_model_version(
+        db, model_id, version_id, current_user
+    )
+    return ModelVersionResponse.model_validate(version)
+
+
 @router.post(
     "/models/{model_id}/versions",
     response_model=ModelVersionResponse,
@@ -100,10 +133,11 @@ async def upload_version(
     file: UploadFile = File(...),
     version_note: str = Form(""),
     trained_on_dataset_id: int | None = Form(None),
+    parent_version_id: int | None = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """上传模型新版本"""
+    """上传模型新版本（可指定父版本与训练数据集）"""
     version = normal_model_service.upload_model_version(
         db,
         model_id=model_id,
@@ -111,6 +145,7 @@ async def upload_version(
         version_note=version_note,
         owner_id=current_user.user_id,
         trained_on_dataset_id=trained_on_dataset_id,
+        parent_version_id=parent_version_id,
     )
     return ModelVersionResponse.model_validate(version)
 

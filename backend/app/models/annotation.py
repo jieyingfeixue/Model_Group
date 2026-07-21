@@ -96,6 +96,16 @@ class Annotation(Base):
         return annotation
 
     @classmethod
+    def get_latest_for_resource(cls, db: Session, resource_id: int) -> Annotation | None:
+        """跨任务取某图片最新一条标注（按 version、updated_at）。"""
+        return (
+            db.query(cls)
+            .filter(cls.resource_id == resource_id)
+            .order_by(cls.version.desc(), cls.updated_at.desc())
+            .first()
+        )
+
+    @classmethod
     def get_by_task(cls, db: Session, task_id: int) -> list[Annotation]:
         """按任务查询所有最新标注（每个 resource 只取最新版本）"""
         from sqlalchemy import func as sqlfunc
