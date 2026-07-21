@@ -53,7 +53,7 @@ export const useUserStore = defineStore('user', {
       if (!token) return
       try {
         const payload = JSON.parse(atob(token.split('.')[1]))
-        this.user = { user_id: payload.user_id, username: payload.username, role: payload.role }
+        this.user = { user_id: Number(payload.sub), username: '', role: payload.role }
         this.role = payload.role
       } catch { /* token invalid */ }
     },

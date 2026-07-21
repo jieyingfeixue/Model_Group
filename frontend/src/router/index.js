@@ -6,7 +6,6 @@ const routes = [
   { path: '/', redirect: '/login' },
   // 独立登录页（无导航栏）
   { path: '/login', name: 'Login', component: () => import('@/views/auth/Login.vue') },
-  { path: '/register', name: 'Register', component: () => import('@/views/auth/Register.vue') },
 
   // 嵌套路由 — 所有业务页面包裹在 AppLayout 中（含侧边栏）
   {
@@ -50,7 +49,7 @@ const router = createRouter({
 // 导航守卫：未登录只能访问登录/注册页
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('access_token')
-  const publicPages = ['/login', '/register']
+  const publicPages = ['/login']
   if (!token && !publicPages.includes(to.path)) {
     return next('/login')
   }
