@@ -14,3 +14,12 @@ minio==7.2.7
 Pillow==10.4.0
 email-validator==2.2.0
 scikit-learn==1.5.0
+# Zhang · Phase2/3：异步任务 / 训练 / ONNX 推理 / 评测
+celery[redis]==5.4.0
+docker==7.1.0
+numpy==1.26.4
+onnxruntime==1.19.2
+pycocotools==2.0.7
+# 可选：.pt → ONNX（YOLO 推荐 ultralytics；TorchScript 可用 torch）
+# ultralytics>=8.0.0
+# torch>=2.0.0

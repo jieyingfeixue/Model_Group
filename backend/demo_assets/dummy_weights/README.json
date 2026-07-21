@@ -1,0 +1,8 @@
+{
+  "note": "placeholder weights for Phase2 API tests",
+  "files": [
+    "dummy.pt",
+    "dummy.pth",
+    "dummy.onnx"
+  ]
+}

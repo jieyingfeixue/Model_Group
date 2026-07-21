@@ -1,13 +1,18 @@
 # ──── 目标检测数据与算法评测平台 — 本地开发环境 ────
 # 用法：docker-compose up -d          # 启动全部服务
-#       docker-compose down           # 停止并移除容器
+#       docker-compose down           # 停止并移除容器（保留数据卷）
 #       docker-compose down -v        # 停止并删除数据卷（慎用）
 #
-# 仅基础设施（原杨同学三件套）：
+# 仅基础设施：
 #       docker-compose up -d postgres redis minio
 #
-# 含 API + Celery（张同学 Phase1）：
-#       docker-compose up -d
+# Phase2 训练镜像（首次或 Dockerfile 变更后）：
+#       docker compose --profile train build train-demo
+#
+# Windows 建议在项目根目录建 .env：
+#       TRAIN_HOST_JOBS_DIR=E:/学校有关/暑期岗位实习/Model_Group-main/data/train_jobs
+#       TRAIN_EXECUTOR=docker
+# 若未配置宿主机路径 / 无训练镜像，Worker 会自动回退 local demo trainer。
 
 version: "3.9"
 
@@ -20,6 +25,12 @@ x-backend-env: &backend-env
   MINIO_SECRET_KEY: minioadmin
   MINIO_BUCKET: detection-platform
   MINIO_SECURE: "false"
+  TRAIN_EXECUTOR: ${TRAIN_EXECUTOR:-docker}
+  TRAIN_IMAGE: detection-train:demo
+  TRAIN_JOBS_DIR: /data/train_jobs
+  TRAIN_HOST_JOBS_DIR: ${TRAIN_HOST_JOBS_DIR:-}
+  TRAIN_MAX_PARALLEL: "1"
+  TRAIN_TIMEOUT_SEC: "3600"
 
 services:
   # ──── PostgreSQL 16 数据库 ────
@@ -58,6 +69,13 @@ services:
       - miniodata:/data
     restart: unless-stopped
 
+  # ──── Phase2 训练 Demo 镜像（构建用，不常驻）────
+  train-demo:
+    build: ./backend/training/demo_trainer
+    image: detection-train:demo
+    profiles: ["train"]
+    command: ["true"]
+
   # ──── FastAPI 后端 ────
   api:
     build: ./backend
@@ -72,6 +90,7 @@ services:
       - minio
     volumes:
       - ./backend:/app
+      - ./data/train_jobs:/data/train_jobs
     restart: unless-stopped
 
   # ──── Celery Worker（训练 / 推理 / 评测异步任务）────
@@ -87,6 +106,8 @@ services:
       - minio
     volumes:
       - ./backend:/app
+      - ./data/train_jobs:/data/train_jobs
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
 volumes:

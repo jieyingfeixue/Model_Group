@@ -93,8 +93,11 @@ def get_pr_curve(
     """
     result = get_eval_metrics(db, task_id, user)
     data = result.pr_curve_data or {}
-    # Phase1：统一返回 points；Phase3 按 class_id 分流
-    points = data.get("points") or data.get(str(class_id)) or []
+    if class_id is not None:
+        by_class = data.get("by_class") or {}
+        points = by_class.get(str(class_id)) or data.get(str(class_id)) or []
+    else:
+        points = data.get("points") or []
     return {"points": points, "class_id": class_id}
 
 
@@ -105,10 +108,39 @@ def get_confusion_matrix(db: Session, task_id: int, user: User) -> dict[str, Any
     API: GET /api/eval/tasks/{id}/confusion
     """
     result = get_eval_metrics(db, task_id, user)
+    labels = []
+    if result.pr_curve_data and isinstance(result.pr_curve_data, dict):
+        labels = result.pr_curve_data.get("confusion_labels") or []
+    if not labels and result.per_class_metrics:
+        labels = [str(x.get("name") or x.get("category_id")) for x in result.per_class_metrics]
     return {
         "matrix": result.confusion_matrix or [],
-        "labels": ["电线杆", "桥梁"],
+        "labels": labels,
     }
+
+
+def invalidate_eval_result(db: Session, result_id: int) -> EvalResult:
+    """管理员下架评测结果（不进天梯）。
+
+    invalidate_eval_result(db, result_id): EvalResult
+    API: POST /api/admin/eval-results/{id}/invalidate
+    """
+    result = db.query(EvalResult).filter(EvalResult.result_id == result_id).first()
+    if result is None:
+        raise HTTPException(status_code=404, detail="评测结果不存在")
+    updated = EvalResult.set_public(db, result_id, False)
+    assert updated is not None
+    return updated
+
+
+def publish_eval_result(db: Session, result_id: int) -> EvalResult:
+    """管理员将结果纳入天梯。"""
+    result = db.query(EvalResult).filter(EvalResult.result_id == result_id).first()
+    if result is None:
+        raise HTTPException(status_code=404, detail="评测结果不存在")
+    updated = EvalResult.set_public(db, result_id, True)
+    assert updated is not None
+    return updated
 
 
 def get_error_samples(

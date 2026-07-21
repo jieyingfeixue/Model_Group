@@ -28,11 +28,7 @@ class Annotation(Base):
         Integer, nullable=False, default=1, server_default="1"
     )
     review_status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default="pending",
-        server_default="pending",
-        comment="审核状态：pending / submitted / approved / rejected",
+        String(20), nullable=False, default="pending", server_default="pending"
     )
     reject_reasons: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSONB, nullable=True
@@ -98,6 +94,16 @@ class Annotation(Base):
         )
         annotation.save(db)
         return annotation
+
+    @classmethod
+    def get_latest_for_resource(cls, db: Session, resource_id: int) -> Annotation | None:
+        """跨任务取某图片最新一条标注（按 version、updated_at）。"""
+        return (
+            db.query(cls)
+            .filter(cls.resource_id == resource_id)
+            .order_by(cls.version.desc(), cls.updated_at.desc())
+            .first()
+        )
 
     @classmethod
     def get_by_task(cls, db: Session, task_id: int) -> list[Annotation]:
