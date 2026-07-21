@@ -2,13 +2,14 @@
   <div class="search-filter">
     <el-input v-model="local.keyword" placeholder="搜索文件名..." clearable class="keyword-input"
       @input="onChange" @clear="onChange" />
-    <el-select v-model="local.modality" placeholder="模态类型" @change="onChange">
-      <el-option label="全部" value="" />
-      <el-option label="可见光" value="visible" />
-      <el-option label="红外" value="infrared" />
-      <el-option label="毫米波" value="mmwave" />
-      <el-option label="激光雷达" value="lidar" />
-    </el-select>
+    <el-popover placement="bottom" :width="200" trigger="click">
+      <template #reference>
+        <el-button plain class="modality-btn" :style="{ color: modalityLabel ? '#374151' : '#a8abb2' }">{{ modalityLabel || '模态类型' }} ▾</el-button>
+      </template>
+      <el-checkbox-group v-model="local.modality" @change="onChange">
+        <el-checkbox v-for="m in modalities" :key="m.value" :label="m.value" :value="m.value" style="display:block;margin:6px 0;">{{ m.label }}</el-checkbox>
+      </el-checkbox-group>
+    </el-popover>
     <el-select v-model="local.annotation_status" placeholder="标注状态" @change="onChange">
       <el-option label="全部" value="" />
       <el-option label="已标注" value="annotated" />
@@ -28,17 +29,29 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 
 const props = defineProps({ modelValue: Object })
 const emit = defineEmits(['update:modelValue'])
 
+const modalities = [
+  { label: '可见光', value: 'visible' },
+  { label: '红外', value: 'infrared' },
+  { label: '毫米波', value: 'mmwave' },
+  { label: '激光雷达', value: 'lidar' },
+]
+
 const local = reactive({
   keyword: props.modelValue?.keyword || '',
-  modality: props.modelValue?.modality || '',
+  modality: props.modelValue?.modality || [],
   annotation_status: props.modelValue?.annotation_status || '',
   scene: props.modelValue?.scene || '',
   timeRange: props.modelValue?.timeRange || null,
+})
+
+const modalityLabel = computed(() => {
+  if (!local.modality.length) return ''
+  return local.modality.map(v => modalities.find(m => m.value === v)?.label).join(' + ')
 })
 
 function onChange() {

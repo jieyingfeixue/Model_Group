@@ -19,6 +19,7 @@ class ModelVersion(Base):
     model_id: Mapped[int] = mapped_column(Integer, nullable=False)
     version_number: Mapped[str] = mapped_column(String(20), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    parent_version_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     trained_on_dataset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     trained_on_dataset_version: Mapped[str | None] = mapped_column(
         String(20), nullable=True
@@ -38,9 +39,17 @@ class ModelVersion(Base):
 
     @classmethod
     def create_version(
-        cls, db: Session, model_id: int, file_path: str, note: str = ""
+        cls,
+        db: Session,
+        model_id: int,
+        file_path: str,
+        note: str = "",
+        parent_version_id: int | None = None,
+        trained_on_dataset_id: int | None = None,
+        trained_on_dataset_version: str | None = None,
+        metrics_snapshot: dict[str, Any] | None = None,
     ) -> ModelVersion:
-        """新增版本记录。版本号自动递增（从已有最大版本推算）。返回新 ModelVersion。"""
+        """新增版本记录。版本号自动递增；无显式父版本时默认挂到最新版。"""
         latest = (
             db.query(cls)
             .filter(cls.model_id == model_id)
@@ -57,10 +66,17 @@ class ModelVersion(Base):
         else:
             next_version = "v1.0.0"
 
+        if parent_version_id is None and latest is not None:
+            parent_version_id = latest.version_id
+
         version = cls(
             model_id=model_id,
             version_number=next_version,
             file_path=file_path,
+            parent_version_id=parent_version_id,
+            trained_on_dataset_id=trained_on_dataset_id,
+            trained_on_dataset_version=trained_on_dataset_version,
+            metrics_snapshot=metrics_snapshot,
             change_note=note,
         )
         version.save(db)
@@ -85,3 +101,8 @@ class ModelVersion(Base):
             .order_by(cls.version_id.desc())
             .first()
         )
+
+    @classmethod
+    def get_by_id(cls, db: Session, version_id: int) -> ModelVersion | None:
+        """按主键取版本"""
+        return db.query(cls).filter(cls.version_id == version_id).first()

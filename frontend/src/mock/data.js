@@ -63,6 +63,42 @@ export function generateDataResources(count = 24) {
   return items
 }
 
+// 生成以样本（同帧多模态）为单位的数据 — 每个样本包含 1-4 种模态
+export function generateSamples(count = 8) {
+  const allModalities = ['visible', 'infrared', 'mmwave', 'lidar']
+  const sampleScenes = ['daytime', 'night', 'rainy', 'foggy']
+  const samples = []
+  let resourceId = 1
+  for (let i = 0; i < count; i++) {
+    const groupId = `group_${String(i + 1).padStart(3, '0')}`
+    const modalityCount = (i % 4) + 1  // 1-4 种模态
+    const scene = sampleScenes[i % 4]
+    const modalities_present = allModalities.slice(0, modalityCount)
+    const images = modalities_present.map((mod, mi) => ({
+      resource_id: resourceId + mi,
+      modality: mod,
+      name: `${mod}_sample_${i + 1}.jpg`,
+      thumbnail: `/api/images/${resourceId + mi}/thumbnail`,
+      annotation_status: (i + mi) % 3 !== 0 ? 'annotated' : 'unannotated',
+    }))
+    resourceId += modalityCount
+    samples.push({
+      sample_id: i + 1,
+      alignment_group_id: groupId,
+      scene,
+      time_of_day: scene === 'night' ? 'night' : 'day',
+      weather: i % 2 === 0 ? 'clear' : 'cloudy',
+      batch_id: `2024Q${(i % 3) + 1}`,
+      device: 'DJI Mavic 3',
+      geo_location: '30.5N, 114.3E',
+      modality_count: modalityCount,
+      images,
+      created_at: new Date(2024, 2, i + 1).toISOString(),
+    })
+  }
+  return samples
+}
+
 export function generateVersions(resourceId) {
   const versions = []
   for (let v = 1; v <= 3; v++) {

@@ -40,6 +40,7 @@ class ModelVersionResponse(BaseModel):
     model_id: int
     version_number: str
     file_path: str
+    parent_version_id: int | None = None
     trained_on_dataset_id: int | None = None
     trained_on_dataset_version: str | None = None
     metrics_snapshot: dict[str, Any] | None = None
@@ -53,6 +54,28 @@ class ModelDetailResponse(ModelResponse):
     versions: list[ModelVersionResponse] = Field(default_factory=list)
 
 
+class ModelLineageNode(BaseModel):
+    version_id: int
+    version_number: str
+    parent_version_id: int | None = None
+    trained_on_dataset_id: int | None = None
+    trained_on_dataset_version: str | None = None
+    change_note: str | None = None
+    metrics_snapshot: dict[str, Any] | None = None
+    created_at: datetime
+    children: list["ModelLineageNode"] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class ModelLineageResponse(BaseModel):
+    model_id: int
+    versions: list[ModelVersionResponse]
+    tree: list[ModelLineageNode]
+
+    model_config = {"protected_namespaces": ()}
+
+
 class ModelVisibilityRequest(BaseModel):
     is_public: bool
 
@@ -60,10 +83,15 @@ class ModelVisibilityRequest(BaseModel):
 class TrainTaskCreate(BaseModel):
     model_id: int
     dataset_id: int
+    model_version_id: int | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     gpu_config: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"protected_namespaces": ()}
+
+
+class TrainRejectRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=2000)
 
 
 class TrainTaskResponse(BaseModel):

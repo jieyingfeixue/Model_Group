@@ -1,10 +1,10 @@
 import request from './request'
 
-const USE_MOCK = false
+const USE_MOCK = true
 
 // 伪造 JWT：payload 编码 { user_id, username, role }，实际项目中由后端签发
-function fakeToken(userId, username, role) {
-  const payload = btoa(JSON.stringify({ user_id: userId, username, role }))
+function fakeToken(userId, role) {
+  const payload = btoa(JSON.stringify({ sub: String(userId), role, type: 'access' }))
   return `header.${payload}.signature`
 }
 
@@ -20,9 +20,9 @@ export async function login(data) {
     if (!u) throw { response: { status: 401, data: { detail: '用户名或密码错误' } } }
     return {
       data: {
-        access_token: fakeToken(u.user_id, u.username, u.role),
-        refresh_token: fakeToken(u.user_id, u.username, u.role),
-        user: { user_id: u.user_id, username: u.username, email: u.email, role: u.role },
+        access_token: fakeToken(u.user_id, u.role),
+        refresh_token: fakeToken(u.user_id, u.role),
+        role: u.role,
       }
     }
   }

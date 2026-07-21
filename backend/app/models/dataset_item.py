@@ -52,6 +52,16 @@ class DatasetItem(Base):
         )
 
     @classmethod
+    def list_by_dataset(
+        cls, db: Session, dataset_id: int, subset: str | None = None
+    ) -> list[DatasetItem]:
+        """按数据集列出条目；subset 为空则返回全部。"""
+        query = db.query(cls).filter(cls.dataset_id == dataset_id)
+        if subset:
+            query = query.filter(cls.subset == subset)
+        return query.order_by(cls.item_id).all()
+
+    @classmethod
     def count_by_subset(cls, db: Session, dataset_id: int) -> dict[str, int]:
         """各子集数量统计，返回 {train: N, val: M, test: K}"""
         from sqlalchemy import func as sqlfunc

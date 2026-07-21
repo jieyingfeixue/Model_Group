@@ -1,6 +1,37 @@
 <template>
-<div class="page"><h2>数据集构建</h2>
+<div class="page">
+  <!-- Hero -->
+    <div class="hero">
+        <div>
+            <h1>🏗️ 数据集构建</h1>
 
+            <p>
+                从平台已有数据或本地上传数据快速构建新的数据集，
+                支持样本筛选、数据划分、版本冻结及公开发布。
+            </p>
+        </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+          <div class="icon">📂</div>
+          <h2>{{ hitCount ?? 0 }}</h2>
+          <span>命中样本</span>
+      </div>
+
+      <div class="stat-card">
+          <div class="icon">🗂️</div>
+          <h2>{{ datasetId ? 1 : 0 }}</h2>
+          <span>已创建数据集</span>
+      </div>
+
+      <div class="stat-card">
+          <div class="icon">📦</div>
+          <h2>{{ statusLabel }}</h2>
+          <span>当前状态</span>
+      </div>
+  </div>
+  <div class="tabs-card">
   <el-tabs v-model="activeTab" class="tabs">
     <!-- ====== 方式一：从平台数据构建 ====== -->
     <el-tab-pane label="从平台数据构建" name="platform">
@@ -19,27 +50,125 @@
             <el-option v-for="c in categoryList" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
           <el-date-picker v-model="filters.timeRange" type="daterange" range-separator="至" start-placeholder="开始" end-placeholder="结束" />
-          <el-button type="primary" @click="onSearch">查询</el-button>
+          <el-button type="primary" size="large" icon="Search" @click="onSearch"> 查询 </el-button>
         </div>
-        <div class="hit-info" v-if="hitCount !== null">命中 <strong>{{ hitCount }}</strong> 个样本</div>
+        <div class="hit-info" v-if="hitCount!==null">
+
+        🎯 已匹配
+
+        <strong>
+
+        {{ hitCount }}
+
+        </strong>
+
+        个样本
+
+        </div>
       </div>
       <div class="card" v-if="hitCount > 0"><h3>子集划分</h3>
         <div class="split-row">
-          <span>训练集</span><el-slider v-model="split.train" :max="100-split.val-split.test" show-input style="flex:1;margin:0 12px;" />
-          <span>验证集</span><el-slider v-model="split.val" :max="100-split.train-split.test" show-input style="flex:1;margin:0 12px;" />
-          <span>测试集</span><el-slider v-model="split.test" :max="100-split.train-split.val" show-input style="flex:1;margin:0 12px;" />
+          <div>
+          <h4>训练集</h4>
+          <el-slider v-model="split.train" :max="100-split.val-split.test" show-input style="flex:1;margin:0 12px;" />
+          </div>
+          <div>
+          <h4>验证集</h4>
+          <el-slider v-model="split.val" :max="100-split.train-split.test" show-input style="flex:1;margin:0 12px;" />
+          </div>
+          <div>
+          <h4>测试集</h4>
+          <el-slider v-model="split.test" :max="100-split.train-split.val" show-input style="flex:1;margin:0 12px;" />
+          </div>
         </div>
+
         <p>训练: {{ split.train }}% | 验证: {{ split.val }}% | 测试: {{ split.test }}%</p>
         <el-radio-group v-model="split.strategy"><el-radio value="random">随机划分</el-radio><el-radio value="stratified">分层均衡</el-radio></el-radio-group>
       </div>
       <div class="card" v-if="hitCount > 0">
-        <el-input v-model="datasetName" placeholder="数据集名称" style="width:260px;margin-right:12px;" />
-        <el-input v-model="versionNote" placeholder="版本说明" style="width:260px;margin-right:12px;" />
-        <el-button type="primary" @click="onCreate">创建数据集</el-button>
-        <el-button type="success" :disabled="!datasetId" @click="onFreeze">冻结</el-button>
-        <el-button type="warning" :disabled="!datasetId" @click="onPublish">发布</el-button>
-      </div>
-      <div class="card" v-if="datasetId"><p>数据集已创建，ID: {{ datasetId }}，状态: {{ statusText }}</p></div>
+
+  <h3>数据集信息</h3>
+
+  <div class="dataset-form">
+
+    <el-input
+      v-model="datasetName"
+      placeholder="数据集名称"
+    />
+
+    <el-input
+      v-model="versionNote"
+      placeholder="版本说明"
+    />
+
+  </div>
+
+  <div class="action-bar">
+
+    <el-button
+      type="primary"
+      size="large"
+      @click="onCreate"
+    >
+      创建数据集
+    </el-button>
+
+    <el-button
+      type="success"
+      size="large"
+      :disabled="!datasetId"
+      @click="onFreeze"
+    >
+      冻结版本
+    </el-button>
+
+    <el-button
+      type="warning"
+      size="large"
+      :disabled="!datasetId"
+      @click="onPublish"
+    >
+      发布数据集
+    </el-button>
+
+  </div>
+
+</div>
+      <div
+          class="success-card"
+          v-if="datasetId"
+          >
+
+          <h3>✅ 数据集创建成功</h3>
+
+          <p>
+
+          数据集ID：
+
+          <strong>
+
+          {{ datasetId }}
+
+          </strong>
+
+          </p>
+
+          <p>
+
+          当前状态：
+
+          <el-tag
+          type="info"
+          round
+          >
+
+          {{ statusLabel }}
+
+          </el-tag>
+
+          </p>
+
+          </div>
     </el-tab-pane>
 
     <!-- ====== 方式二：从本地上传 ====== -->
@@ -81,10 +210,11 @@
     </el-tab-pane>
   </el-tabs>
 </div>
+</div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const activeTab = ref('platform')
@@ -92,7 +222,6 @@ const modalities = ['visible','infrared','mmwave','lidar']
 const scenes = ['daytime','night','rainy','foggy']
 const categoryList = [{id:1,name:'电线杆'},{id:2,name:'桥梁'},{id:3,name:'建筑物'},{id:4,name:'树木'},{id:5,name:'路灯'}]
 function modLabel(m){ const map={visible:'可见光',infrared:'红外',mmwave:'毫米波',lidar:'激光雷达'}; return map[m]||m }
-
 // ---- 方式一：平台数据 ----
 const filters = reactive({ modality:[], scene:[], annotation_status:'', labels:[], timeRange:null, logic:'and' })
 const split = reactive({ train:70, val:20, test:10, strategy:'random' })
@@ -106,6 +235,15 @@ function onCreate(){ datasetId.value = Date.now(); statusText.value='draft'; ElM
 function onFreeze(){ statusText.value='frozen'; ElMessage.success('已冻结') }
 function onPublish(){ statusText.value='published'; ElMessage.success('已发布') }
 
+const statusLabel = computed(()=>{
+    const map = {
+        draft:'草稿',
+        frozen:'已冻结',
+        published:'已发布'
+    }
+    return map[statusText.value]
+})
+
 // ---- 方式二：本地上传 ----
 const uploadFiles = ref([])
 const uploadOpts = reactive({ withAnnotation: false, format: 'coco', modality: 'visible' })
@@ -117,15 +255,299 @@ function onUploadCreate(){ datasetId.value = Date.now(); statusText.value='draft
 </script>
 
 <style scoped>
-.page{ padding:24px; max-width:1200px; }
+.page{
+
+padding:28px;
+
+max-width:1450px;
+
+margin:auto;
+
+background:#f8fafc;
+
+min-height:100vh;
+
+}
+
+.hero{
+  padding:45px 50px;
+  margin-bottom:28px;
+  border-radius:18px;
+  color:white;
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  box-shadow: 0 10px 30px rgba(30,64,175,.18);
+}
+
+.hero h1{
+    font-size:34px;
+    font-weight:700;
+    margin-bottom:12px;
+}
+
+.hero p{
+    max-width:700px;
+    line-height:1.8;
+    opacity:.92;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:22px;
+    margin-bottom:30px;
+}
+
+.stat-card{
+    background:white;
+    border-radius:18px;
+    padding:26px;
+    text-align:center;
+    box-shadow:
+    0 8px 24px rgba(15,23,42,.05);
+}
+
+.stat-card h2{
+    font-size:34px;
+    color:#2563eb;
+    margin:8px 0;
+}
+
+.stat-card span{
+    color:#64748b;
+}
+
+.icon{
+    font-size:30px;
+}
+
 .tabs{ margin-bottom:16px; }
-.card{ background:#fff; border-radius:8px; padding:20px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
-.card h3{ margin-bottom:12px; font-size:15px; }
-.filter-row{ }
-.filter-row>*{ display:block; width:100%; margin-bottom:12px; }
-.hit-info{ margin-top:12px; font-size:14px; color:#6b7280; }
-.split-row{ display:flex; align-items:center; }
-.upload-zone{ border:2px dashed #d1d5db; border-radius:8px; padding:40px; text-align:center; }
+
+.tabs-card{
+
+background:white;
+
+border-radius:22px;
+
+margin-bottom:30px;
+
+padding:28px;
+
+box-shadow:
+0 8px 24px rgba(15,23,42,.05);
+
+}
+.card{
+
+background:white;
+
+padding:26px;
+
+border-radius:18px;
+
+border:1px solid #e2e8f0;
+
+box-shadow:
+
+0 8px 24px rgba(15,23,42,.05);
+
+margin-bottom:24px;
+
+transition:.3s;
+
+}
+
+.card:hover{
+
+transform:translateY(-3px);
+
+box-shadow:
+
+0 12px 30px rgba(15,23,42,.08);
+
+}
+.card h3{
+
+font-size:18px;
+
+font-weight:700;
+
+margin-bottom:22px;
+
+color:#1e293b;
+
+}
+.filter-row{
+
+display:grid;
+
+grid-template-columns:
+
+repeat(auto-fit,minmax(220px,1fr));
+
+gap:18px;
+
+align-items:center;
+
+}
+
+.hit-info{
+
+margin-top:22px;
+
+padding:18px;
+
+background:#eff6ff;
+
+border-left:
+
+5px solid #2563eb;
+
+border-radius:12px;
+
+font-size:15px;
+
+color:#2563eb;
+
+}
+
+.success-card{
+
+padding:24px;
+
+background:#f0fdf4;
+
+border:1px solid #86efac;
+
+border-radius:16px;
+
+}
+
+.split-row{
+
+display:grid;
+
+grid-template-columns:
+
+repeat(3,1fr);
+
+gap:30px;
+
+margin:20px 0;
+
+}
+.upload-zone{
+
+padding:70px;
+
+border-radius:18px;
+
+border:2px dashed #3b82f6;
+
+background:#f8fbff;
+
+transition:.3s;
+
+cursor:pointer;
+
+}
+.upload-zone:hover{
+
+background:#eff6ff;
+
+border-color:#2563eb;
+
+}
+
 .upload-zone .hint{ font-size:12px; color:#9ca3af; margin-top:4px; }
 .file-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-.file-tag{ background:#f3f4f6; padding:2px 8px; border-radius:4px; font-size:12px; }</style>
+.file-tag{
+
+background:#dbeafe;
+
+color:#2563eb;
+
+padding:6px 12px;
+
+border-radius:30px;
+
+font-size:13px;
+
+}
+.dataset-form{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:16px;
+}
+
+.action-bar{
+  display:flex;
+  justify-content:flex-end;
+  gap:16px;
+  margin-top:26px;
+}
+
+:deep(.el-tabs__header){
+
+    margin-bottom:28px;
+
+}
+
+:deep(.el-tabs__nav){
+
+    background:white;
+
+    border-radius:14px;
+
+    padding:6px;
+
+    box-shadow:
+    0 8px 22px rgba(15,23,42,.05);
+
+}
+
+:deep(.el-tabs__item){
+
+    height:46px;
+
+    font-size:15px;
+
+    font-weight:600;
+
+}
+
+:deep(.el-tabs__item.is-active){
+
+    color:#2563eb;
+
+}
+
+:deep(.el-input__wrapper){
+
+border-radius:10px;
+
+}
+
+:deep(.el-select__wrapper){
+
+border-radius:10px;
+
+}
+
+:deep(.el-button){
+
+border-radius:10px;
+
+}
+
+:deep(.el-date-editor){
+
+width:100%;
+
+}
+
+:deep(.el-slider__runway){
+
+margin:20px 0;
+
+}
+</style>

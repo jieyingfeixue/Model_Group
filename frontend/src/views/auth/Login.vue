@@ -215,24 +215,6 @@
 
 
 
-
-    <p class="switch-link">
-
-
-      没有账号？
-
-      <router-link to="/register">
-
-        立即注册
-
-      </router-link>
-
-
-    </p>
-
-
-
-
   </div>
 
 
@@ -596,35 +578,11 @@ font-size:15px;
 
 
 
-.switch-link{
-
-
-text-align:center;
-
-
-font-size:14px;
-
-
-color:#64748b;
-
-
-margin-top:20px;
-
-
-}
 
 
 
-.switch-link a{
 
 
-color:#2563eb;
-
-
-text-decoration:none;
-
-
-}
 
 
 

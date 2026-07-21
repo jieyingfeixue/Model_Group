@@ -107,7 +107,7 @@
       <el-form-item label="框架"><el-select v-model="uploadForm.framework"><el-option label="PyTorch" value="pytorch" /><el-option label="ONNX" value="onnx" /></el-select></el-form-item>
       <el-form-item label="骨干网络"><el-input v-model="uploadForm.backbone" placeholder="如 ResNet50" /></el-form-item>
       <el-form-item label="输入尺寸"><el-input v-model="uploadForm.inputSize" placeholder="640x640" /></el-form-item>
-      <el-form-item label="模型文件"><input type="file" accept=".pt,.pth,.onnx" @change="onFileChange" /></el-form-item>
+      <el-form-item label="模型文件"><el-button @click="onMockUpload">选择文件（Mock）</el-button></el-form-item>
     </el-form>
     <template #footer><el-button @click="uploadVisible=false">取消</el-button><el-button type="primary" @click="onSubmit">确认上传</el-button></template>
   </el-dialog>
@@ -115,33 +115,20 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getMyModels, registerModel } from '@/api/model'
 const router = useRouter()
 const filter = ref('')
 const uploadVisible = ref(false)
 const uploadForm = reactive({ name:'', framework:'pytorch', backbone:'', inputSize:'640x640' })
-const models = ref([])
-async function fetchModels() {
-  try {
-    const { data } = await getMyModels()
-    models.value = Array.isArray(data) ? data : (data.items || data.models || [])
-  } catch { /* backend not ready */ }
-}
-onMounted(fetchModels)
-let selectedFile = null
-function onFileChange(e) { selectedFile = e.target.files[0] }
-async function onSubmit(){
-  if (!selectedFile) { ElMessage.warning('请选择模型文件'); return }
-  try {
-    await registerModel({ ...uploadForm, file: selectedFile })
-    uploadVisible.value = false
-    ElMessage.success('模型已上传')
-    fetchModels()
-  } catch(e) { ElMessage.error(e?.response?.data?.detail || '上传失败') }
-}
+const models = ref([
+  { model_id:1, name:'YOLOv8-低光增强', framework:'pytorch', status:'available', created_at:'2024-05-10' },
+  { model_id:2, name:'Faster R-CNN ResNet-50', framework:'pytorch', status:'available', created_at:'2024-06-02' },
+  { model_id:3, name:'DETR-多模态', framework:'onnx', status:'available', created_at:'2024-06-20' },
+])
+function onMockUpload(){ ElMessage.info('Mock：文件已选择') }
+function onSubmit(){ uploadVisible.value = false; ElMessage.success('模型已上传（Mock）') }
 function onEval(row){ router.push('/eval?model='+row.model_id) }
 </script>
 
@@ -154,19 +141,12 @@ function onEval(row){ router.push('/eval?model='+row.model_id) }
     min-height:100vh;
 }
 .hero{
-  padding:40px;
-  margin-bottom:30px;
-  border-radius:22px;
-  background:
-  linear-gradient(
-  135deg,
-  #1d4ed8,
-  #2563eb,
-  #3b82f6
-  );
+  padding:45px 50px;
+  margin-bottom:28px;
+  border-radius:18px;
   color:white;
-  box-shadow:
-  0 10px 30px rgba(37,99,235,.25);
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  box-shadow: 0 10px 30px rgba(30,64,175,.18);
 }
 
 .hero h1{

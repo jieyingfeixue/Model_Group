@@ -1,14 +1,6 @@
 import request from './request'
 
-export function registerModel(data) {
-  // 后端要求 multipart/form-data: file + name + framework + metadata
-  const formData = new FormData()
-  formData.append('name', data.name || data.get?.('name') || '')
-  formData.append('framework', data.framework || data.get?.('framework') || 'pytorch')
-  formData.append('metadata', JSON.stringify(data.metadata || { backbone: data.backbone || '', input_size: data.inputSize || '640x640' }))
-  if (data.file) formData.append('file', data.file)
-  return request.post('/models', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
-}
+export function registerModel(formData)          { return request.post('/models', formData) }
 export function getMyModels(params)              { return request.get('/models', { params }) }
 export function getModelDetail(id)               { return request.get(`/models/${id}`) }
 export function uploadVersion(id, formData)      { return request.post(`/models/${id}/versions`, formData) }
