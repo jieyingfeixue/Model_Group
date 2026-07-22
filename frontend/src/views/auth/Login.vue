@@ -250,7 +250,7 @@ async function onLogin() {
     const user = { user_id: Number(payload.sub), username: form.username, role: data.role }
     userStore.login(user, data.access_token, data.refresh_token)
     ElMessage.success('登录成功')
-    router.push('/home')
+    router.push(data.role === 'admin' ? '/admin/users' : '/home')
   } catch (e) {
     const msg = e?.response?.data?.detail || '登录失败'
     ElMessage.error(msg)

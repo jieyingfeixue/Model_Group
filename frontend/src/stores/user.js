@@ -30,7 +30,6 @@ export const useUserStore = defineStore('user', {
           { path: '/review/annotations', icon: '🔍', label: '标注审核' },
         ],
         admin: [
-          { path: '/home', icon: '🏠', label: '首页' },
           { path: '/admin/users', icon: '👥', label: '用户管理' },
           { path: '/admin/labels', icon: '🏷️', label: '标签管理' },
           { path: '/admin/datasource', icon: '📁', label: '数据源' },

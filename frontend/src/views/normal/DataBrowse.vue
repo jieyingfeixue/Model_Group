@@ -91,7 +91,7 @@ function onFilterChange(val) {
   fetchSamples()
 }
 function fetchSamples() {
-  let all = generateSamples(12)
+  let all = generateSamples(36)
   const f = filters.value
   // 模态筛选：AND 逻辑，样本必须同时包含所有选中模态
   if (f.modality && f.modality.length > 0) {
@@ -108,10 +108,9 @@ function fetchSamples() {
   total.value = all.length
 }
 function onSelect(sample) {
-  // 点击样本，后续可跳转到样本详情页
-  console.log('Selected sample:', sample)
+  router.push({ name: 'SampleDetail', params: { id: sample.sample_id } })
 }
-function onPageChange(page) { currentPage.value = page; fetchSamples() }
+function onPageChange(page) { currentPage.value = page; fetchSamples(); window.scrollTo(0, 0) }
 onMounted(fetchSamples)
 </script>
 

@@ -65,24 +65,38 @@
         个样本
 
         </div>
+        <!-- 样本数量输入 -->
+        <div v-if="hitCount > 0" style="margin-top:16px;">
+          <p style="color:#6b7280;">从 {{ hitCount }} 个匹配样本中，随机选用
+            <el-input-number v-model="sampleCount" :min="1" :max="hitCount" style="width:100px;margin:0 8px;" />
+            个样本放入数据集
+          </p>
+          <p style="margin-top:8px;color:#6b7280;">匹配样本预览（分页浏览）：</p>
+          <div class="sample-grid">
+            <div v-for="s in matchedSamples.slice((samplePage-1)*samplePageSize, samplePage*samplePageSize)" :key="s.sample_id" class="sample-item">
+              <div class="thumb-row">
+                <div v-for="img in s.images.slice(0,4)" :key="img.resource_id" class="mini-thumb" :class="img.modality">
+                  <img :src="img.thumbnail" @error="e=>e.target.style.display='none'" />
+                </div>
+              </div>
+              <div class="sample-meta">
+                <span>#{{ s.sample_id }}</span>
+                <span>{{ s.scene }}</span>
+                <span>{{ s.modality_count }}模态</span>
+              </div>
+            </div>
+          </div>
+          <el-pagination v-if="hitCount > samplePageSize" background layout="prev, pager, next"
+            :total="hitCount" :page-size="samplePageSize" :current-page="samplePage"
+            @current-change="samplePage = $event" style="margin-top:12px;justify-content:center;" />
+        </div>
       </div>
       <div class="card" v-if="hitCount > 0"><h3>子集划分</h3>
-        <div class="split-row">
-          <div>
-          <h4>训练集</h4>
-          <el-slider v-model="split.train" :max="100-split.val-split.test" show-input style="flex:1;margin:0 12px;" />
-          </div>
-          <div>
-          <h4>验证集</h4>
-          <el-slider v-model="split.val" :max="100-split.train-split.test" show-input style="flex:1;margin:0 12px;" />
-          </div>
-          <div>
-          <h4>测试集</h4>
-          <el-slider v-model="split.test" :max="100-split.train-split.val" show-input style="flex:1;margin:0 12px;" />
-          </div>
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+          <span>训练集</span><el-input-number v-model="split.train" :min="0" :max="99 - split.val" @change="split.test = 100 - split.train - split.val" style="width:120px;" /> %
+          <span>验证集</span><el-input-number v-model="split.val" :min="1" :max="99 - split.train" @change="split.test = 100 - split.train - split.val" style="width:120px;" /> %
+          <span style="color:#6b7280;">测试集 = 100 - 训练 - 验证 = {{ split.test }}%</span>
         </div>
-
-        <p>训练: {{ split.train }}% | 验证: {{ split.val }}% | 测试: {{ split.test }}%</p>
         <el-radio-group v-model="split.strategy"><el-radio value="random">随机划分</el-radio><el-radio value="stratified">分层均衡</el-radio></el-radio-group>
       </div>
       <div class="card" v-if="hitCount > 0">
@@ -215,6 +229,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { generateSamples } from '@/mock/data'
 import { ElMessage } from 'element-plus'
 
 const activeTab = ref('platform')
@@ -230,8 +245,39 @@ const datasetName = ref('')
 const versionNote = ref('')
 const datasetId = ref(null)
 const statusText = ref('draft')
-function onSearch(){ hitCount.value = 320 }
-function onCreate(){ datasetId.value = Date.now(); statusText.value='draft'; ElMessage.success('数据集已创建（Mock）') }
+const matchedSamples = ref([])
+const samplePage = ref(1)
+const samplePageSize = ref(12)
+const sampleCount = ref(20)
+function onSearch() {
+  const f = filters
+  // 按筛选条件生成样本，模态数量越多样本越少（更真实）
+  const modalCount = f.modality?.length || 0
+  const totalCount = modalCount > 0 ? Math.max(12, 60 - modalCount * 12) : 60
+  let all = generateSamples(totalCount)
+  // 筛选
+  if (f.modality?.length) all = all.filter(s => f.modality.every(m => s.images.some(img => img.modality === m)))
+  if (f.scene?.length) all = all.filter(s => f.scene.includes(s.scene))
+  if (f.annotation_status === 'annotated') all = all.filter(s => s.images.some(img => img.annotation_status === 'annotated'))
+  if (f.annotation_status === 'unannotated') all = all.filter(s => s.images.every(img => img.annotation_status === 'unannotated'))
+  hitCount.value = all.length
+  matchedSamples.value = all
+  samplePage.value = 1
+  sampleCount.value = Math.min(20, all.length)
+}
+function onCreate(){
+  if (sampleCount.value < 1) { ElMessage.warning('请至少选择1个样本'); return }
+  // 从匹配样本中随机挑选 sampleCount 个
+  const pool = [...matchedSamples.value]
+  const selected = []
+  const n = Math.min(sampleCount.value, pool.length)
+  for (let i = 0; i < n; i++) {
+    const idx = Math.floor(Math.random() * pool.length)
+    selected.push(pool.splice(idx, 1)[0])
+  }
+  datasetId.value = Date.now(); statusText.value='draft'
+  ElMessage.success(`已从 ${matchedSamples.value.length} 个样本中随机选取 ${n} 个，数据集已创建（Mock）`)
+}
 function onFreeze(){ statusText.value='frozen'; ElMessage.success('已冻结') }
 function onPublish(){ statusText.value='published'; ElMessage.success('已发布') }
 
@@ -550,4 +596,13 @@ width:100%;
 margin:20px 0;
 
 }
+.sample-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+.sample-item{ background:#fff; border-radius:10px; padding:10px; cursor:pointer;
+  border:2px solid #e5e7eb; transition:all .2s; }
+.sample-item:hover{ border-color:#93c5fd; }
+.sample-item.selected{ border-color:#3b82f6; background:#eff6ff; }
+.thumb-row{ display:grid; grid-template-columns:1fr 1fr; gap:2px; margin-bottom:8px; }
+.mini-thumb{ height:70px; background:#f3f4f6; border-radius:6px; overflow:hidden; }
+.mini-thumb img{ width:100%; height:100%; object-fit:cover; }
+.sample-meta{ display:flex; align-items:center; gap:8px; font-size:12px; color:#6b7280; }
 </style>

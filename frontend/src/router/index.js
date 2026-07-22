@@ -16,6 +16,7 @@ const routes = [
       { path: 'mydatasets', name: 'MyDatasets', component: () => import('@/views/normal/MyDatasets.vue') },
       { path: 'profile', name: 'Profile', component: () => import('@/views/auth/Profile.vue') },
       { path: 'data', name: 'DataBrowse', component: () => import('@/views/normal/DataBrowse.vue') },
+      { path: 'sample/:id', name: 'SampleDetail', component: () => import('@/views/normal/SampleDetail.vue') },
       { path: 'data/:id', name: 'DataDetail', component: () => import('@/views/normal/DataDetail.vue') },
       { path: 'market', name: 'DataMarket', component: () => import('@/views/normal/DataMarket.vue') },
       { path: 'annotate/:taskId', name: 'AnnotationTool', component: () => import('@/views/normal/AnnotationTool.vue') },

@@ -13,10 +13,6 @@
         </div>
 
         <div class="hero-user">
-          <div class="hero-avatar">
-            {{ userStore.user?.username?.charAt(0)?.toUpperCase() || '?' }}
-          </div>
-
           <div class="hero-info">
             <h2>{{ userStore.user?.username }}</h2>
 
