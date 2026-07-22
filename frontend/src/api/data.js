@@ -16,8 +16,10 @@ export async function getDataList(params) {
 }
 
 export async function getDataDetail(id) {
-  // 后端接口: GET /api/data/resources/{id}
-  return request.get(`/data/resources/${id}`)
+  // 后端无单条查询接口，从列表获取全部并筛选
+  const res = await request.get('/data', { params: { page: 1, size: 6000 } })
+  const items = res.data?.items || []
+  return { data: items.find(item => item.resource_id === Number(id)) }
 }
 
 // 后端暂未提供版本历史接口，保留函数签名后续对接

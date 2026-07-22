@@ -26,11 +26,11 @@ import { getDataDetail, getThumbnailUrl } from '@/api/data'
 
 const route = useRoute()
 const router = useRouter()
-const item = ref({ metadata: {} })
-const versions = ref([])  // 后端暂未提供版本历史
+const item = ref({ meta_info: {} })
+const versions = ref([])
 const showAnnotations = ref(true)
 
-const imageUrl = computed(() => item.value.resource_id ? getThumbnailUrl(item.value.resource_id) : '')
+const imageUrl = computed(() => item.value.resource_id ? `/api/images/${item.value.resource_id}` : '')
 const categoryLabels = ref([
   { id: 1, name: '电线杆' }, { id: 2, name: '桥梁' },
   { id: 3, name: '建筑物' }, { id: 4, name: '树木' }, { id: 5, name: '路灯' },

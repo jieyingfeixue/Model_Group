@@ -36,7 +36,7 @@
           <el-button
               type="primary"
               size="large"
-              @click="$router.push('/datasets/build')"
+              @click="$router.push({path:'/datasets/build', query:{fresh:'1'}})"
           >
               + 构建数据集
           </el-button>
@@ -53,6 +53,7 @@
               <el-option label="草稿" value="draft"/>
               <el-option label="已冻结" value="frozen"/>
               <el-option label="已发布" value="published"/>
+              <el-option label="已归档" value="archived"/>
           </el-select>
       </div>
   </div>
@@ -110,6 +111,7 @@
 
           <!-- 归档 -->
           <el-button
+            v-if="row.archive_status !== 'archived'"
             size="small"
             type="danger"
             plain
@@ -117,6 +119,15 @@
             @click="onArchive(row)"
           >
             归档
+          </el-button>
+          <el-button
+            v-else
+            size="small"
+            type="success"
+            round
+            @click="onRestore(row)"
+          >
+            恢复
           </el-button>
 
         </template>
@@ -130,16 +141,14 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
+import { sharedDatasets } from '@/mock/data'
 const filter = reactive({ status: '' })
-const datasets = ref([
-  { dataset_id:1, name:'我的低空障碍物检测数据集 v1.0', version:'v1.0', sample_count:320, status:'draft', visibility:'private', created_at:'2024-06-15' },
-  { dataset_id:2, name:'红外夜间场景数据集', version:'v1.1', sample_count:150, status:'frozen', visibility:'private', created_at:'2024-06-20' },
-  { dataset_id:3, name:'多模态融合数据集 v2.0', version:'v2.0', sample_count:500, status:'published', visibility:'public', created_at:'2024-07-01' },
-])
+const datasets = ref(sharedDatasets)
 function statusType(s){ const map={draft:'info',frozen:'warning',published:'success'}; return map[s]||'info' }
 function onFreeze(row){ row.status='frozen'; ElMessage.success('已冻结') }
 function onPublish(row){ row.status='published'; row.visibility='public'; ElMessage.success('已发布') }
-function onArchive(row){ datasets.value = datasets.value.filter(d=>d.dataset_id!==row.dataset_id); ElMessage.success('已归档') }
+function onArchive(row){ row.archive_status='archived'; ElMessage.success('已归档') }
+function onRestore(row){ row.archive_status='active'; ElMessage.success('已恢复') }
 </script>
 
 <style scoped>

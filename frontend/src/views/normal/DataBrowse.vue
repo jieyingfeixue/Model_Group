@@ -43,7 +43,7 @@
 
         共
         <span>{{ total }}</span>
-        条数据
+        个样本
 
       </div>
 
@@ -76,7 +76,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SearchFilter from '@/components/common/SearchFilter.vue'
 import SampleCard from '@/components/common/SampleCard.vue'
-import { generateSamples } from '@/mock/data'
+import { getDataList } from '@/api/data'
 
 const router = useRouter()
 const samples = ref([])
@@ -90,22 +90,25 @@ function onFilterChange(val) {
   currentPage.value = 1
   fetchSamples()
 }
-function fetchSamples() {
-  let all = generateSamples(36)
-  const f = filters.value
-  // 模态筛选：AND 逻辑，样本必须同时包含所有选中模态
-  if (f.modality && f.modality.length > 0) {
-    all = all.filter(s => f.modality.every(m => s.images.some(img => img.modality === m)))
-  }
-  if (f.scene) {
-    all = all.filter(s => s.scene === f.scene)
-  }
-  if (f.keyword) {
-    all = all.filter(s => s.alignment_group_id.includes(f.keyword) || s.batch_id.includes(f.keyword))
-  }
-  const start = (currentPage.value - 1) * pageSize.value
-  samples.value = all.slice(start, start + pageSize.value)
-  total.value = all.length
+async function fetchSamples() {
+  try {
+    const { data } = await getDataList({ page: 1, size: 6000 })
+    const items = (data.items || []).filter(item => item.meta_info?.sample_group)
+    const groupMap = {}
+    items.forEach(item => {
+      const gid = item.meta_info?.sample_group || item.resource_id
+      if (!groupMap[gid]) groupMap[gid] = { sample_id: gid, images: [], scene: item.meta_info?.scene || '-', modality_count: 0 }
+      groupMap[gid].images.push({
+        resource_id: item.resource_id, modality: item.modality, name: item.name,
+        thumbnail: `/api/images/${item.resource_id}/thumbnail`, annotation_status: item.annotation_status,
+      })
+      groupMap[gid].modality_count = groupMap[gid].images.length
+    })
+    let all = Object.values(groupMap)
+    total.value = all.length
+    const start = (currentPage.value - 1) * pageSize.value
+    samples.value = all.slice(start, start + pageSize.value)
+  } catch { /* backend not ready */ }
 }
 function onSelect(sample) {
   router.push({ name: 'SampleDetail', params: { id: sample.sample_id } })
@@ -304,4 +307,5 @@ gap:10px;
 
 }
 
+.sample-grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
 </style>

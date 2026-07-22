@@ -1,6 +1,6 @@
 import request from './request'
 
-const USE_MOCK = true
+const USE_MOCK = false
 
 // 伪造 JWT：payload 编码 { user_id, username, role }，实际项目中由后端签发
 function fakeToken(userId, role) {
