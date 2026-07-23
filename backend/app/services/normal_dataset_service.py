@@ -322,3 +322,65 @@ def publish_dataset(
     dataset.version = version_note or dataset.version
     dataset.save(db)
     return _build_response(db, dataset)
+
+
+# ──── 数据集条目查询 ────
+
+def get_dataset_samples(db: Session, dataset_id: int) -> list[dict[str, Any]]:
+    """获取数据集内的样本列表，按 sample_group 分组。
+
+    返回格式：
+    [
+      {
+        "sample_group": "1",
+        "scene": "daytime",
+        "resources": [
+          {"resource_id": 6559, "modality": "infrared", "name": "xxx.jpg",
+           "annotation_status": "unannotated", "file_path": "/...", ...},
+          ...
+        ]
+      },
+      ...
+    ]
+    """
+    from app.models.dataset_item import DatasetItem
+    from app.models.data_resource import DataResource
+
+    rows = (
+        db.query(
+            DatasetItem.resource_id,
+            DatasetItem.subset,
+            DataResource.name,
+            DataResource.modality,
+            DataResource.file_path,
+            DataResource.annotation_status,
+            DataResource.meta_info,
+        )
+        .join(DataResource, DatasetItem.resource_id == DataResource.resource_id)
+        .filter(DatasetItem.dataset_id == dataset_id)
+        .all()
+    )
+
+    # 按 sample_group 分组
+    groups: dict[str, dict[str, Any]] = {}
+    for rid, subset, name, modality, file_path, anno_status, meta in rows:
+        sg = str(meta.get("sample_group", rid)) if meta else str(rid)
+        if sg not in groups:
+            groups[sg] = {
+                "sample_group": sg,
+                "scene": (meta or {}).get("scene", "-"),
+                "weather": (meta or {}).get("weather"),
+                "time_of_day": (meta or {}).get("time_of_day"),
+                "terrain": (meta or {}).get("terrain"),
+                "obstacle": (meta or {}).get("obstacle"),
+                "subset": subset,
+                "resources": [],
+            }
+        groups[sg]["resources"].append({
+            "resource_id": rid,
+            "modality": modality,
+            "name": name,
+            "annotation_status": anno_status,
+        })
+
+    return list(groups.values())

@@ -84,6 +84,27 @@ def get_dataset(
     return DatasetResponse(**result)
 
 
+# ──── GET /api/datasets/{dataset_id}/items ────
+
+@router.get("/{dataset_id}/items")
+def get_dataset_items(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    """获取数据集内的样本列表，按 sample_group 分组"""
+    dataset = normal_dataset_service.get_dataset(db, dataset_id)
+    if dataset is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="数据集不存在")
+    samples = normal_dataset_service.get_dataset_samples(db, dataset_id)
+    return {
+        "dataset_id": dataset_id,
+        "name": dataset["name"],
+        "samples": samples,
+        "total": len(samples),
+    }
+
+
 # ──── POST /api/datasets/{dataset_id}/split ────
 
 @router.post("/{dataset_id}/split", response_model=DatasetResponse)
