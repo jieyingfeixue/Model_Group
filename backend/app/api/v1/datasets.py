@@ -148,3 +148,42 @@ def publish_dataset(
     """发布数据集（需先冻结）"""
     result = normal_dataset_service.publish_dataset(db, dataset_id, body.version_note)
     return DatasetResponse(**result)
+
+
+# ──── POST /api/datasets/{dataset_id}/archive ────
+
+@router.post("/{dataset_id}/archive", response_model=DatasetResponse)
+def archive_dataset(
+    dataset_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """归档数据集"""
+    result = normal_dataset_service.archive_dataset(db, dataset_id)
+    return DatasetResponse(**result)
+
+
+# ──── POST /api/datasets/{dataset_id}/restore ────
+
+@router.post("/{dataset_id}/restore", response_model=DatasetResponse)
+def restore_dataset(
+    dataset_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """恢复已归档数据集"""
+    result = normal_dataset_service.restore_dataset(db, dataset_id)
+    return DatasetResponse(**result)
+
+
+# ──── POST /api/datasets/{dataset_id}/submit-review ────
+
+@router.post("/{dataset_id}/submit-review", response_model=DatasetResponse)
+def submit_for_review(
+    dataset_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """提交数据集审核（需先冻结）"""
+    result = normal_dataset_service.submit_for_review(db, dataset_id)
+    return DatasetResponse(**result)

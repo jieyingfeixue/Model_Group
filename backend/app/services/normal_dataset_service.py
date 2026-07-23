@@ -326,6 +326,49 @@ def publish_dataset(
 
 # ──── 数据集条目查询 ────
 
+# ──── 归档 / 恢复 ────
+
+def archive_dataset(db: Session, dataset_id: int) -> dict[str, Any]:
+    """归档数据集（active → archived）"""
+    dataset = Dataset.set_archive_status(db, dataset_id, "archived")
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="数据集不存在"
+        )
+    return _build_response(db, dataset)
+
+
+def restore_dataset(db: Session, dataset_id: int) -> dict[str, Any]:
+    """恢复已归档数据集（archived → active）"""
+    dataset = Dataset.set_archive_status(db, dataset_id, "active")
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="数据集不存在"
+        )
+    return _build_response(db, dataset)
+
+
+# ──── 提交审核 ────
+
+def submit_for_review(db: Session, dataset_id: int) -> dict[str, Any]:
+    """提交数据集审核（review_status → pending_review）"""
+    dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="数据集不存在"
+        )
+    if dataset.status != "frozen":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只有已冻结的数据集才能提交审核",
+        )
+    dataset.review_status = "pending_review"
+    dataset.save(db)
+    return _build_response(db, dataset)
+
+
+# ──── 数据集条目查询 ────
+
 def get_dataset_samples(db: Session, dataset_id: int) -> list[dict[str, Any]]:
     """获取数据集内的样本列表，按 sample_group 分组。
 

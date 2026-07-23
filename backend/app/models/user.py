@@ -40,6 +40,13 @@ class User(Base):
     # ──── 类方法 ────
 
     @classmethod
+    def create(cls, db: Session, **fields: Any) -> User:
+        """创建用户，返回新 User 实例"""
+        user = cls(**fields)
+        user.save(db)
+        return user
+
+    @classmethod
     def get_by_username(cls, db: Session, username: str) -> User | None:
         """按用户名查询，不存在返回 None"""
         return db.query(cls).filter(cls.username == username).first()
