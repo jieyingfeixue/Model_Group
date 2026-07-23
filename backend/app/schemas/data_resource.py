@@ -47,11 +47,19 @@ class DataResourceFilter(BaseModel):
     modality: Modality | None = None
     annotation_status: AnnotationStatus | None = None
     status: ResourceStatus | None = None
+    # ── 场景标签筛选（meta_info JSONB 字段） ──
     scene: str | None = None
+    weather: str | None = None
+    time_of_day: str | None = None
+    terrain: str | None = None
+    obstacle: str | None = None
+    batch_id: str | None = None
+    sample_group: int | None = None
+    # ── 时间 / 分页 ──
     start_time: str | None = Field(None, description="起始时间 ISO 字符串")
     end_time: str | None = Field(None, description="结束时间 ISO 字符串")
     page: int = Field(default=1, ge=1)
-    size: int = Field(default=20, ge=1, le=100)
+    size: int = Field(default=20, ge=1, le=6000)
 
 
 # ──── 响应模型 ────

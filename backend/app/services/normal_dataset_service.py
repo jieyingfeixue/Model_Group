@@ -136,7 +136,13 @@ def _apply_split(
     resource_ids: list[int],
     split_config: dict[str, Any],
 ) -> None:
-    """根据配置将 resource_ids 分配到 train / val / test"""
+    """根据配置将 resource_ids 分配到 train / val / test
+
+    支持三种策略:
+      - random:   按单个 resource_id 随机打乱后切分
+      - grouped:  按 sample_group 分组后整组分配（保持多模态配对不被拆散）
+      - 其他:     不 shuffle，按原始顺序切分
+    """
     train_pct = int(split_config.get("train", 70))
     val_pct = int(split_config.get("val", 20))
     test_pct = int(split_config.get("test", 10))
@@ -149,15 +155,95 @@ def _apply_split(
             detail="切分比例之和不能为 0",
         )
 
+    # ── grouped 策略：按 sample_group 聚合后整组分配 ──
+    if strategy == "grouped":
+        _apply_grouped_split(db, dataset_id, resource_ids, train_pct, val_pct, test_pct, total)
+    else:
+        _apply_flat_split(db, dataset_id, resource_ids, train_pct, val_pct, test_pct, total, strategy)
+
+    # 回写 split_config 到数据集
+    dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
+    if dataset:
+        dataset.split_config = split_config
+        dataset.save(db)
+
+
+def _apply_grouped_split(
+    db: Session,
+    dataset_id: int,
+    resource_ids: list[int],
+    train_pct: int,
+    val_pct: int,
+    test_pct: int,
+    total_pct: int,
+) -> None:
+    """按 sample_group 分组后整组随机分配到 train/val/test"""
+    # 1. 批量查询 sample_group
+    rows = (
+        db.query(
+            DataResource.resource_id,
+            DataResource.meta_info["sample_group"].astext,
+        )
+        .filter(DataResource.resource_id.in_(resource_ids))
+        .all()
+    )
+
+    # 2. 建立分组: {group_key: [resource_id, ...]}
+    groups: dict[str, list[int]] = {}
+    seen: set[int] = set()
+    for rid, sg in rows:
+        seen.add(rid)
+        key = sg if sg else f"_single_{rid}"
+        groups.setdefault(key, []).append(rid)
+
+    # 3. 未查到的 resource_id 各自独立成组
+    for rid in resource_ids:
+        if rid not in seen:
+            groups.setdefault(f"_single_{rid}", []).append(rid)
+
+    # 4. 打乱 group_id，保持组内顺序
+    group_ids = list(groups.keys())
+    random.shuffle(group_ids)
+
+    # 5. 按组数量比例分配
+    n_groups = len(group_ids)
+    train_end = max(1, int(n_groups * train_pct / total_pct))
+    val_end = train_end + max(0, int(n_groups * val_pct / total_pct))
+
+    items: list[dict[str, Any]] = []
+    for i, gid in enumerate(group_ids):
+        if i < train_end:
+            subset = "train"
+        elif i < val_end:
+            subset = "val"
+        else:
+            subset = "test"
+        for rid in groups[gid]:
+            items.append({"resource_id": rid, "subset": subset})
+
+    DatasetItem.bulk_insert(db, dataset_id, items)
+
+
+def _apply_flat_split(
+    db: Session,
+    dataset_id: int,
+    resource_ids: list[int],
+    train_pct: int,
+    val_pct: int,
+    test_pct: int,
+    total_pct: int,
+    strategy: str,
+) -> None:
+    """按单个 resource_id 切分（原有逻辑）"""
     ids = list(resource_ids)
     if strategy == "random":
         random.shuffle(ids)
 
     n = len(ids)
-    train_end = max(1, int(n * train_pct / total))
-    val_end = train_end + max(0, int(n * val_pct / total))
+    train_end = max(1, int(n * train_pct / total_pct))
+    val_end = train_end + max(0, int(n * val_pct / total_pct))
 
-    items = []
+    items: list[dict[str, Any]] = []
     for i, rid in enumerate(ids):
         if i < train_end:
             subset = "train"
@@ -168,12 +254,6 @@ def _apply_split(
         items.append({"resource_id": rid, "subset": subset})
 
     DatasetItem.bulk_insert(db, dataset_id, items)
-
-    # 回写 split_config 到数据集
-    dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
-    if dataset:
-        dataset.split_config = split_config
-        dataset.save(db)
 
 
 def split_dataset(

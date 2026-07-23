@@ -58,6 +58,11 @@ def list_data(
     annotation_status: str | None = Query(None),
     status: str | None = Query(None),
     scene: str | None = Query(None),
+    weather: str | None = Query(None),
+    time_of_day: str | None = Query(None),
+    terrain: str | None = Query(None),
+    obstacle: str | None = Query(None),
+    batch_id: str | None = Query(None),
     sample_group: int | None = Query(None),
     start_time: str | None = Query(None, description="起始时间 ISO 字符串"),
     end_time: str | None = Query(None, description="结束时间 ISO 字符串"),
@@ -75,6 +80,16 @@ def list_data(
         filters["status"] = status
     if scene:
         filters["scene"] = scene
+    if weather:
+        filters["weather"] = weather
+    if time_of_day:
+        filters["time_of_day"] = time_of_day
+    if terrain:
+        filters["terrain"] = terrain
+    if obstacle:
+        filters["obstacle"] = obstacle
+    if batch_id:
+        filters["batch_id"] = batch_id
     if sample_group is not None:
         filters["sample_group"] = sample_group
     if start_time:

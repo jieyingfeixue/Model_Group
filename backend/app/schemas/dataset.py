@@ -25,7 +25,7 @@ class DatasetSplitRequest(BaseModel):
     train: int = Field(default=70, ge=0, le=100)
     val: int = Field(default=20, ge=0, le=100)
     test: int = Field(default=10, ge=0, le=100)
-    strategy: str = Field(default="random", description="切分策略: random / sequential")
+    strategy: str = Field(default="random", description="random / sequential / grouped（按样本组聚合，保持多模态配对）")
 
 
 class DatasetPublishRequest(BaseModel):
