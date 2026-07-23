@@ -105,6 +105,8 @@ class DataResource(Base):
             query = query.filter(cls.status == status)
         if scene := filters.get("scene"):
             query = query.filter(cls.meta_info["scene"].astext == scene)
+        if sample_group := filters.get("sample_group"):
+            query = query.filter(cls.meta_info["sample_group"].astext == str(sample_group))
         if batch_id := filters.get("batch_id"):
             query = query.filter(cls.meta_info["batch_id"].astext == batch_id)
 

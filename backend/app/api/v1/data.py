@@ -2,12 +2,13 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
+from app.models.data_resource import DataResource
 from app.schemas.data_resource import DataResourceCreate, DataResourceResponse
 from app.services import normal_data_service
 
@@ -57,14 +58,14 @@ def list_data(
     annotation_status: str | None = Query(None),
     status: str | None = Query(None),
     scene: str | None = Query(None),
+    sample_group: int | None = Query(None),
     start_time: str | None = Query(None, description="起始时间 ISO 字符串"),
     end_time: str | None = Query(None, description="结束时间 ISO 字符串"),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    size: int = Query(20, ge=1, le=6000),
     db: Session = Depends(get_db),
 ):
-    """查询当前用户的数据资源列表，支持多条件筛选 + 分页"""
+    """查询平台全部数据资源（数据浏览），支持多条件筛选 + 分页"""
     filters: dict[str, Any] = {}
     if modality:
         filters["modality"] = modality
@@ -74,18 +75,14 @@ def list_data(
         filters["status"] = status
     if scene:
         filters["scene"] = scene
+    if sample_group is not None:
+        filters["sample_group"] = sample_group
     if start_time:
         filters["start_time"] = start_time
     if end_time:
         filters["end_time"] = end_time
 
-    items, total = normal_data_service.list_my_data(
-        db,
-        owner_id=current_user.user_id,
-        filters=filters,
-        page=page,
-        size=size,
-    )
+    items, total = DataResource.search(db, filters=filters, page=page, size=size)
     return {
         "items": [DataResourceResponse.model_validate(r) for r in items],
         "total": total,

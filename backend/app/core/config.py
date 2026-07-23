@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "detection-platform"
     MINIO_SECURE: bool = False
 
+    # ──── Training ────
+    TRAIN_EXECUTOR: str = "local"
+    TRAIN_IMAGE: str = "detection-train:demo"
+    TRAIN_JOBS_DIR: str = "./data/train_jobs"
+    TRAIN_MAX_PARALLEL: int = 1
+    TRAIN_TIMEOUT_SEC: int = 3600
+
     # ──── App ────
     APP_TITLE: str = "目标检测数据与算法评测平台"
     APP_VERSION: str = "1.0.0-alpha"
