@@ -26,9 +26,7 @@
           <div class="user-name">
               {{ userStore.user?.username }}
           </div>
-          <div class="user-role">
-              普通用户
-          </div>
+          <div class="user-role">{{ roleLabel }}</div>
           <el-button
               class="logout-btn"
               plain
@@ -42,11 +40,16 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 const router = useRouter()
 const userStore = useUserStore()
+const roleLabel = computed(() => {
+  const map = { normal: '普通用户', reviewer: '审核员', admin: '管理员' }
+  return map[userStore.role] || '普通用户'
+})
 function logout() {
   userStore.logout()
   ElMessage.success('已退出登录')
