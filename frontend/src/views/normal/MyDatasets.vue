@@ -50,10 +50,6 @@
               style="width:160px"
           >
               <el-option label="全部" value=""/>
-              <el-option label="草稿" value="draft"/>
-              <el-option label="已冻结" value="frozen"/>
-              <el-option label="已发布" value="published"/>
-              <el-option label="已归档" value="archived"/>
           </el-select>
       </div>
   </div>
@@ -61,74 +57,36 @@
   <div class="table-card">
     <el-table :data="datasets" style="margin-top:12px;">
       <el-table-column prop="name" label="数据集名称" />
-      <el-table-column prop="version" label="版本" width="80" header-align="center" align="center" />
       <el-table-column prop="sample_count" label="样本数" width="100" header-align="center" align="center" />
-      <el-table-column prop="status" label="状态" width="100" header-align="center" align="center">
-        <template #default="{row}"><el-tag
-        :type="statusType(row.status)"
-        round
-        effect="light"
-        >
-        {{row.status}}
-        </el-tag>
+      <el-table-column prop="annotation_progress" label="标注状态" width="110" header-align="center" align="center">
+        <template #default="{row}">
+          <el-tag v-if="row.annotated_count === row.sample_count" type="success" round effect="light" size="small">已完成标注</el-tag>
+          <el-tag v-else type="warning" round effect="light" size="small">未完成标注</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="visibility" label="可见范围" width="100" header-align="center" align="center" />
       <el-table-column prop="created_at" label="创建时间" width="120" header-align="center" align="center" />
-      <el-table-column label="操作" width="280" header-align="center" align="center">
+      <el-table-column label="操作" width="320" header-align="center" align="center">
         <template #default="{ row }">
 
-          <!-- 详情 -->
-          <el-button
-            size="small"
-            plain
-            @click="$router.push('/datasets/' + row.dataset_id)"
-          >
-            详情
-          </el-button>
+          <el-button size="small" plain @click="$router.push('/datasets/' + row.dataset_id)">详情</el-button>
 
-          <!-- 冻结 -->
+          <!-- 标注（未完成标注时显示） -->
           <el-button
-            v-if="row.status === 'draft'"
-            size="small"
-            type="success"
-            round
-            @click="onFreeze(row)"
-          >
-            冻结
-          </el-button>
+            v-if="row.annotated_count < row.sample_count"
+            size="small" type="primary" round @click="$router.push('/annotate/' + row.dataset_id)"
+          >标注</el-button>
 
-          <!-- 发布 -->
+          <!-- 提交公开申请（未提交或被驳回时显示） -->
+          <el-tooltip content="提交后将同时进入数据集审核和标注审核，两者均通过后自动发布到数据集市场" placement="top">
           <el-button
-            v-if="row.status === 'frozen'"
-            size="small"
-            type="warning"
-            round
-            @click="onPublish(row)"
-          >
-            发布
-          </el-button>
+            v-if="row.review_status === 'not_submitted' || row.review_status === 'rejected'"
+            size="small" type="warning" round @click="onSubmitReview(row)"
+          >提交公开申请</el-button>
+          </el-tooltip>
 
-          <!-- 归档 -->
-          <el-button
-            v-if="row.archive_status !== 'archived'"
-            size="small"
-            type="danger"
-            plain
-            round
-            @click="onArchive(row)"
-          >
-            归档
-          </el-button>
-          <el-button
-            v-else
-            size="small"
-            type="success"
-            round
-            @click="onRestore(row)"
-          >
-            恢复
-          </el-button>
+          <!-- 删除 -->
+          <el-button size="small" type="danger" plain round @click="onDelete(row)">删除</el-button>
 
         </template>
       </el-table-column>
@@ -139,16 +97,54 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
-import { sharedDatasets } from '@/mock/data'
+import { ref, reactive, onMounted, onActivated, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getDatasetList, deleteDataset, submitForReview } from '@/api/dataset'
+
 const filter = reactive({ status: '' })
-const datasets = ref(sharedDatasets)
-function statusType(s){ const map={draft:'info',frozen:'warning',published:'success'}; return map[s]||'info' }
-function onFreeze(row){ row.status='frozen'; ElMessage.success('已冻结') }
-function onPublish(row){ row.status='published'; row.visibility='public'; ElMessage.success('已发布') }
-function onArchive(row){ row.archive_status='archived'; ElMessage.success('已归档') }
-function onRestore(row){ row.archive_status='active'; ElMessage.success('已恢复') }
+const datasets = ref([])
+const loading = ref(false)
+
+async function fetchDatasets() {
+  loading.value = true
+  try {
+    const params = {}
+    if (filter.status) params.status = filter.status
+    const { data } = await getDatasetList(params)
+    datasets.value = (data.items || []).filter(d => d.archive_status !== 'archived')
+  } catch {
+    ElMessage.error('加载数据集列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function onSubmitReview(row){
+  try {
+    await submitForReview(row.dataset_id)
+    row.review_status = 'submitted'
+    ElMessage.success('已提交公开申请，等待审核员审批')
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
+}
+
+async function onDelete(row){
+  try {
+    await ElMessageBox.confirm(
+      `确定删除数据集「${row.name}」？删除后不可恢复。`,
+      '确认删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    await deleteDataset(row.dataset_id)
+    datasets.value = datasets.value.filter(d => d.dataset_id !== row.dataset_id)
+    ElMessage.success('已删除')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.detail || '删除失败')
+  }
+}
+
+onMounted(fetchDatasets)
+onActivated(fetchDatasets)
+watch(() => filter.status, fetchDatasets)
 </script>
 
 <style scoped>

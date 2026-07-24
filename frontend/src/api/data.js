@@ -4,15 +4,33 @@ const USE_MOCK = false  // 后端已就绪
 
 export function uploadData(formData)            { return request.post('/data/upload', formData) }
 
-export async function getDataList(params) {
-  // 后端接口: GET /api/data?page=1&size=20&modality=visible
-  return request.get('/data', {
-    params: {
-      page: params.page || 1,
-      size: params.page_size || params.size || 20,
-      modality: params.modality || undefined,
+export async function getDataList(params = {}) {
+  // 后端: GET /api/data — 支持场景标签筛选 weather/time_of_day/terrain/obstacle
+  const query = {
+    page: params.page || 1,
+    size: params.page_size || params.size || 20,
+  }
+  const passKeys = [
+    'modality',
+    'annotation_status',
+    'status',
+    'scene',
+    'weather',
+    'time_of_day',
+    'terrain',
+    'obstacle',
+    'batch_id',
+    'sample_group',
+    'start_time',
+    'end_time',
+  ]
+  for (const key of passKeys) {
+    const val = params[key]
+    if (val !== undefined && val !== null && val !== '') {
+      query[key] = val
     }
-  })
+  }
+  return request.get('/data', { params: query })
 }
 
 export async function getDataDetail(id) {

@@ -18,7 +18,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ImagePreview from '@/components/canvas/ImagePreview.vue'
 import InfoPanel from '@/components/common/InfoPanel.vue'
@@ -44,15 +44,8 @@ const ids = computed(() => {
 async function loadItem(id) {
   try {
     const { data } = await getDataDetail(id)
-    // InfoPanel 读 metadata；后端字段为 meta_info
-    item.value = {
-      ...data,
-      metadata: data.meta_info || data.metadata || {},
-      bboxes: data.bboxes || [],
-    }
-  } catch (e) {
-    console.error(e)
-  }
+    item.value = data
+  } catch { /* backend not ready */ }
 }
 
 function navigate(dir) {
@@ -71,9 +64,6 @@ function onKey(e) {
 onMounted(() => {
   loadItem(route.params.id)
   window.addEventListener('keydown', onKey)
-})
-watch(() => route.params.id, (id) => {
-  if (id) loadItem(id)
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>

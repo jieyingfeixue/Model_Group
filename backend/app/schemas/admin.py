@@ -1,90 +1,118 @@
-"""管理端通用 Schema — 用户 / 数据源 / 配置 / 天梯权重等"""
+"""管理员 Schema — 用户管理 / 标签管理"""
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.schemas.auth import validate_password_strength
+
+# ──── 用户管理 ────
 
 
-class AdminUserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    password: str
-    email: EmailStr
-    role: str = Field(default="normal", pattern=r"^(normal|reviewer|admin)$")
+class AdminUserCreateRequest(BaseModel):
+    """管理员创建用户请求"""
+    username: str = Field(..., min_length=3, max_length=50, description="用户名")
+    email: EmailStr = Field(..., description="邮箱")
+    password: str = Field(..., min_length=6, max_length=100, description="密码")
+    role: str = Field(default="normal", description="角色: admin / reviewer / normal")
 
-    @field_validator("password")
+    @field_validator("role")
     @classmethod
-    def password_ok(cls, v: str) -> str:
-        return validate_password_strength(v)
+    def validate_role(cls, v: str) -> str:
+        allowed = {"admin", "reviewer", "normal"}
+        if v not in allowed:
+            raise ValueError(f"角色必须为以下之一: {', '.join(allowed)}")
+        return v
 
 
-class AdminUserRoleUpdate(BaseModel):
-    role: str = Field(..., pattern=r"^(normal|reviewer|admin)$")
-
-
-class AdminUserStatusUpdate(BaseModel):
-    is_active: bool | None = None
-
-
-class DataSourceCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    source_type: str = Field(..., pattern=r"^(oss_bucket|local_dir|s3)$")
-    connection_info: dict[str, Any] = Field(default_factory=dict)
-    modality: str = Field(default="visible")
-    status: str = Field(default="inactive", pattern=r"^(active|inactive)$")
-
-
-class DataSourceSensorsUpdate(BaseModel):
-    sensors: dict[str, Any] = Field(default_factory=dict)
-
-
-class DataSourceSyncRequest(BaseModel):
-    force: bool = False
-    limit: int = Field(default=100, ge=1, le=5000)
-
-
-class PlatformConfigUpdate(BaseModel):
-    """平台运行时配置（存 Redis，覆盖/补充环境默认值）"""
-
-    train_max_parallel: int | None = Field(None, ge=1, le=16)
-    train_timeout_sec: int | None = Field(None, ge=60, le=86400)
-    infer_require_approval: bool | None = None
-    eval_auto_publish: bool | None = None
-    extra: dict[str, Any] | None = None
-
-
-class EvalWeightsUpdate(BaseModel):
-    night_map_weight: float = Field(0.3, ge=0.0, le=1.0)
-    fps_weight: float = Field(0.1, ge=0.0, le=1.0)
-    map50_weight: float = Field(0.4, ge=0.0, le=1.0)
-    map5095_weight: float = Field(0.2, ge=0.0, le=1.0)
-    categories: list[str] | None = None
-
-
-class AuditLogResponse(BaseModel):
-    log_id: int
+class AdminUserResponse(BaseModel):
+    """管理员视角用户信息响应"""
     user_id: int
-    action: str
-    target_type: str
-    target_id: int
-    before_state: dict[str, Any] | None = None
-    after_state: dict[str, Any] | None = None
-    ip_address: str | None = None
-    user_agent: str | None = None
+    username: str
+    email: str
+    role: str
+    is_active: bool
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class DataSourceResponse(BaseModel):
-    source_id: int
-    name: str
-    source_type: str
-    connection_info: dict[str, Any]
-    modality: str
+class AdminUserListResponse(BaseModel):
+    """用户列表响应"""
+    items: list[AdminUserResponse]
+    total: int
+    page: int = 1
+    size: int = 20
+
+
+class RoleUpdateRequest(BaseModel):
+    """修改角色请求"""
+    role: str = Field(..., description="admin / reviewer / normal")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        allowed = {"admin", "reviewer", "normal"}
+        if v not in allowed:
+            raise ValueError(f"角色必须为以下之一: {', '.join(allowed)}")
+        return v
+
+
+class StatusUpdateRequest(BaseModel):
+    """冻结/解冻请求"""
+    is_active: bool = Field(..., description="true=激活, false=冻结")
+
+
+# ──── 推理审批 ────
+
+class InferTaskPendingItem(BaseModel):
+    """推理审批待处理项"""
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
+
+    task_id: int
+    model_id: int
+    dataset_id: int | None = None
+    image_id: int | None = None
     status: str
-    created_at: datetime
+    created_by: int
+    created_at: datetime | str | None
 
-    model_config = {"from_attributes": True}
+
+class InferTaskPendingListResponse(BaseModel):
+    """推理审批待处理列表"""
+    items: list[InferTaskPendingItem]
+    total: int
+    page: int = 1
+    size: int = 20
+
+
+# ──── 天梯治理 ────
+
+class LeaderboardGovernanceItem(BaseModel):
+    """天梯治理条目（含管理操作信息）"""
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
+
+    result_id: int
+    model_id: int
+    model_name: str | None = None
+    dataset_id: int
+    mAP50: float | None = None
+    mAP50_95: float | None = None
+    is_public: bool = False
+    is_invalidated: bool = False
+    created_at: datetime | str | None = None
+
+
+class LeaderboardGovernanceResponse(BaseModel):
+    """天梯治理列表"""
+    items: list[LeaderboardGovernanceItem]
+    total: int
+    page: int = 1
+    size: int = 20
+
+
+# ──── 作弊下架 ────
+
+class EvalResultInvalidateRequest(BaseModel):
+    """作弊下架请求"""
+    reason: str = Field(..., min_length=1, description="下架原因说明")

@@ -1,91 +1,54 @@
-<template>
-  <div class="page" v-loading="loading">
-    <h2>模型详情</h2>
-    <div class="card" v-if="model">
-      <h3>基本信息</h3>
-      <table class="kv">
-        <tr><td>名称</td><td>{{ model.name }}</td></tr>
-        <tr><td>框架</td><td>{{ model.framework }}</td></tr>
-        <tr><td>状态</td><td>{{ model.status }}</td></tr>
-        <tr><td>输入</td><td>{{ inputSize }}</td></tr>
-        <tr><td>模态</td><td>{{ (meta.modalities || []).join(', ') || '-' }}</td></tr>
-        <tr><td>类别</td><td>{{ (meta.categories || []).join(', ') || '-' }}</td></tr>
-        <tr><td>公开</td><td>{{ model.is_public ? '是' : '否' }}</td></tr>
-        <tr><td>创建时间</td><td>{{ formatDate(model.created_at) }}</td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <h3>版本历史</h3>
-      <el-empty v-if="!versions.length" description="暂无版本" />
-      <el-timeline v-else>
-        <el-timeline-item
-          v-for="v in versions"
-          :key="v.version_id"
-          :timestamp="formatDate(v.created_at)"
-        >
-          {{ v.version_number }} — {{ v.change_note || '无说明' }}
-        </el-timeline-item>
-      </el-timeline>
-    </div>
-    <el-button type="success" @click="goTrain">训练</el-button>
-    <el-button type="warning" style="margin-left:12px" @click="goInfer">推理</el-button>
-    <el-button type="danger" style="margin-left:12px" @click="goEval">评测</el-button>
+<template><div class="page" v-if="model">
+  <div class="hero"><h1>{{ model.name }}</h1><p>{{ model.framework }} · {{ model.status }}</p></div>
+  <div class="card"><h3>基本信息</h3>
+    <table class="kv">
+      <tr><td>名称</td><td>{{ model.name }}</td></tr>
+      <tr><td>框架</td><td>{{ model.framework }}</td></tr>
+      <tr><td>骨干</td><td>{{ model.meta_info?.backbone || '-' }}</td></tr>
+      <tr><td>输入尺寸</td><td>{{ model.meta_info?.input_size?.w || 640 }}×{{ model.meta_info?.input_size?.h || 640 }}</td></tr>
+      <tr><td>状态</td><td><el-tag :type="model.status==='available'?'success':'info'" round size="small">{{ model.status }}</el-tag></td></tr>
+      <tr><td>创建时间</td><td>{{ model.created_at }}</td></tr>
+    </table>
   </div>
-</template>
-
+  <div class="card" v-if="versions.length > 0"><h3>版本历史</h3>
+    <el-timeline><el-timeline-item v-for="v in versions" :key="v.version_id" :timestamp="v.created_at">
+      {{ v.version_number }} — {{ v.change_note || '无说明' }}
+    </el-timeline-item></el-timeline>
+  </div>
+  <div class="actions">
+    <el-button type="success" @click="$router.push('/train')">训练</el-button>
+    <el-button type="warning" @click="$router.push('/eval')">评测</el-button>
+  </div>
+</div>
+<div v-else class="loading">加载中...</div></template>
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { getModelDetail } from '@/api/model'
 
 const route = useRoute()
-const router = useRouter()
-const loading = ref(false)
 const model = ref(null)
+const versions = ref([])
 
-const versions = computed(() => model.value?.versions || [])
-const meta = computed(() => model.value?.meta_info || {})
-const inputSize = computed(() => {
-  const s = meta.value.input_size
-  if (Array.isArray(s) && s.length >= 2) return `${s[0]}x${s[1]}`
-  return '-'
-})
-
-function formatDate(v) {
-  if (!v) return '-'
-  return String(v).replace('T', ' ').slice(0, 19)
-}
-
-async function load() {
-  loading.value = true
+onMounted(async () => {
   try {
     const { data } = await getModelDetail(route.params.id)
     model.value = data
-  } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '加载模型详情失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-function goTrain() {
-  router.push({ path: '/train', query: { model_id: route.params.id } })
-}
-function goInfer() {
-  router.push({ path: '/infer/0', query: { model_id: route.params.id } })
-}
-function goEval() {
-  router.push({ path: '/eval', query: { model_id: route.params.id } })
-}
-
-watch(() => route.params.id, load)
-onMounted(load)
+    versions.value = data.versions || []
+  } catch { model.value = null }
+})
 </script>
-
 <style scoped>
-.page{padding:24px;max-width:800px;margin:0 auto}
-.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.page{padding:24px;max-width:900px;margin:0 auto}
+.hero{padding:32px 40px;margin-bottom:24px;border-radius:18px;
+  background:linear-gradient(135deg,#0f172a,#1e3a8a);color:white;
+  box-shadow:0 10px 30px rgba(30,64,175,.18)}
+.hero h1{font-size:26px;margin-bottom:6px}
+.hero p{opacity:.85}
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:16px;
+  box-shadow:0 1px 4px rgba(0,0,0,.04);border:1px solid #e5e7eb}
 .kv td{padding:6px 12px 6px 0;font-size:14px}
 .kv td:first-child{color:#6b7280;width:100px}
+.actions{display:flex;gap:12px;margin-top:16px}
+.loading{text-align:center;padding:60px;color:#9ca3af}
 </style>

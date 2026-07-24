@@ -35,10 +35,6 @@ class DataResourceCreate(BaseModel):
 
     name: str
     modality: Modality
-    captured_at: float | None = Field(
-        default=None,
-        description="采集时间戳（Unix 秒，浮点），可来自 EXIF 自动提取或手动传入",
-    )
     meta_info: dict[str, Any] = Field(
         default_factory=dict,
         description="元信息，可含 width/height/channels/file_size/device/scene/weather/time_of_day 等",
@@ -51,11 +47,19 @@ class DataResourceFilter(BaseModel):
     modality: Modality | None = None
     annotation_status: AnnotationStatus | None = None
     status: ResourceStatus | None = None
+    # ── 场景标签筛选（meta_info JSONB 字段） ──
     scene: str | None = None
+    weather: str | None = None
+    time_of_day: str | None = None
+    terrain: str | None = None
+    obstacle: str | None = None
+    batch_id: str | None = None
+    sample_group: int | None = None
+    # ── 时间 / 分页 ──
     start_time: str | None = Field(None, description="起始时间 ISO 字符串")
     end_time: str | None = Field(None, description="结束时间 ISO 字符串")
     page: int = Field(default=1, ge=1)
-    size: int = Field(default=20, ge=1, le=100)
+    size: int = Field(default=20, ge=1, le=6000)
 
 
 # ──── 响应模型 ────
@@ -79,29 +83,49 @@ class DataResourceResponse(BaseModel):
     model_config = {"from_attributes": True, "populate_by_name": True}
 
 
-# ──── 对齐请求 / 响应 ────
+# ──── 元信息更新 ────
 
 
-class AlignmentRequest(BaseModel):
-    """多模态时间戳对齐请求"""
-
-    resource_ids: list[int] = Field(..., min_length=2, description="参与对齐的数据资源 ID 列表")
-    strategy: str = Field(
-        ...,
-        pattern=r"^(nearest_neighbor|downsample|interpolate)$",
-        description="对齐策略：nearest_neighbor / downsample / interpolate",
-    )
-    params: dict[str, Any] = Field(
-        default_factory=dict,
-        description="策略参数：time_window_ms（nearest_neighbor） / target_fps（downsample） / interpolation_strategy（interpolate）",
-    )
+class DataResourceMetadataUpdateRequest(BaseModel):
+    """更新数据资源元信息请求"""
+    meta_info: dict[str, Any] = Field(..., description="要合并的元信息字段（与现有字段合并）")
 
 
-class AlignmentResponse(BaseModel):
-    """对齐结果响应"""
+# ──── 版本 ────
 
-    group_id: int
-    strategy: str
-    pairs_count: int
-    report: dict[str, Any]
-    created_at: datetime
+
+class DataResourceVersionItem(BaseModel):
+    """数据资源版本条目"""
+    version: int
+    updated_at: datetime | str | None
+
+
+class DataResourceVersionListResponse(BaseModel):
+    """数据资源版本列表"""
+    resource_id: int
+    versions: list[DataResourceVersionItem]
+    current_version: int
+
+
+# ──── 多模态对齐 ────
+
+
+class DataAlignRequest(BaseModel):
+    """多模态帧对齐请求"""
+    resource_ids: list[int] = Field(..., min_length=1, description="待对齐的数据资源 ID 列表")
+
+
+class DataAlignGroup(BaseModel):
+    """单个对齐组"""
+    sample_group: str
+    modalities: list[str]
+    resource_ids: list[int]
+    scene: str | None = None
+    time_of_day: str | None = None
+
+
+class DataAlignResponse(BaseModel):
+    """多模态帧对齐结果"""
+    groups: list[DataAlignGroup]
+    total_groups: int
+    ungrouped: list[int] = Field(default_factory=list, description="未能成组的资源 ID")

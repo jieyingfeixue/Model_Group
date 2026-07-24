@@ -1,101 +1,227 @@
 """
-时间戳匹配导入脚本 — 以红外为基准，可见光最近邻匹配
-用法: python scripts/import_segment_data.py
+多模态采集会话导入脚本 — 对齐云上目录结构
+
+支持目录:
+  with_cameras_capture_YYYYMMDD_HHMMSS/
+    ├── ..._part000_.../
+    │   ├── segment_000_.../
+    │   │   ├── images/{sensor}/*.jpg
+    │   │   └── pointclouds/{sensor}/*.pcd
+    │   └── segment_001_.../
+    └── ..._part001_.../
+
+用法:
+  python scripts/import_segment_data.py
+  python scripts/import_segment_data.py --capture with_cameras_capture_20260427_151113
+  python scripts/import_segment_data.py --dry-run --limit-groups 20
 
 策略:
-  1. 解析所有传感器文件名中的时间戳 (_tSSSSSS.mmm → 秒.毫秒)
-  2. 以红外 (usb_ir) 的 1286 个时间戳为基准
-  3. 对每张红外，在可见光相机1 (DA8679037) 和相机2 (DA8679038) 中二分查找最近时间戳
-  4. 上传匹配后的文件到 MinIO
-  5. 写入 data_resources（同组共享 group_id）
-  6. 创建 alignment_groups 记录对齐关系
-  7. 创建数据集并填充 dataset_items
+  1. 扫描 capture → part → segment
+  2. 每个 segment 内以红外时间戳为基准，最近邻匹配可见光/点云
+  3. 跳过 @eaDir、不存在/不可读文件（如未下载的网盘占位）
+  4. 上传 MinIO，写入 data_resources（modality + Excel 场景标签）
+  5. 可选写入 alignment_groups / datasets
 """
-import os, sys, re, json
-sys.stdout.reconfigure(encoding='utf-8')
-from pathlib import Path
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
 from bisect import bisect_left
 from collections import defaultdict
+from pathlib import Path
+
+sys.stdout.reconfigure(encoding="utf-8")
 
 from PIL import Image
 from minio import Minio
 from sqlalchemy import create_engine, text
 
-# ─── 路径配置 ───
-BASE_DIR = Path(__file__).resolve().parent.parent
-SEGMENT_DIR = BASE_DIR / "segment_001_000112.000_000203.000"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from scene_tag_utils import (  # noqa: E402
+    DEFAULT_EXCEL,
+    infer_batch_id_from_path,
+    load_excel_folder_tags,
+    lookup_tags_for_path,
+)
 
-# ─── 连接配置 ───
+# ─── 默认路径 / 连接 ───
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_CAPTURE = BASE_DIR / "with_cameras_capture_20260427_151113"
+SCENE_EXCEL = Path(os.environ.get("SCENE_EXCEL", str(DEFAULT_EXCEL)))
+
 MINIO = Minio("localhost:9000", access_key="minioadmin", secret_key="minioadmin", secure=False)
 BUCKET = "detection-platform"
-DB_URL = "postgresql://postgres:123456@localhost:5432/detection_platform"
+DB_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres:123456@localhost:5432/detection_platform"
+)
 
-# ─── 传感器配置 ───
 SENSOR_CONFIG = {
-    "hikrobot_camera__DA8679037__image_raw": {"modality": "visible",  "device": "海康 DA8679037"},
-    "hikrobot_camera__DA8679038__image_raw": {"modality": "visible",  "device": "海康 DA8679038"},
-    "usb_ir__image_raw":                     {"modality": "infrared", "device": "USB 红外"},
-    "at360__points":                         {"modality": "lidar",    "device": "AT360 激光雷达"},
+    "hikrobot_camera__DA8679037__image_raw": {"modality": "visible", "device": "海康 DA8679037"},
+    "hikrobot_camera__DA8679038__image_raw": {"modality": "visible", "device": "海康 DA8679038"},
+    "usb_ir__image_raw": {"modality": "infrared", "device": "USB 红外"},
+    "at360__points": {"modality": "lidar", "device": "AT360 激光雷达"},
 }
 
-ADMIN_ID = 5
+IR_NAME = "usb_ir__image_raw"
+VIS1_NAME = "hikrobot_camera__DA8679037__image_raw"
+VIS2_NAME = "hikrobot_camera__DA8679038__image_raw"
+LIDAR_NAME = "at360__points"
 
-# ─── 工具函数 ───
+ADMIN_ID = int(os.environ.get("IMPORT_OWNER_ID", "0"))  # 0 = 自动选择/创建
+
+
+def ensure_owner_id(db, preferred: int = 0) -> int:
+    """保证导入用的 owner_id 在 users 表中存在。"""
+    if preferred > 0:
+        row = db.execute(
+            text("SELECT user_id FROM users WHERE user_id = :uid"),
+            {"uid": preferred},
+        ).fetchone()
+        if row:
+            return int(row[0])
+        print(f"  [WARN] 指定 owner_id={preferred} 不存在，改为自动选择")
+
+    row = db.execute(
+        text("SELECT user_id FROM users WHERE role = 'admin' ORDER BY user_id LIMIT 1")
+    ).fetchone()
+    if row:
+        return int(row[0])
+
+    row = db.execute(text("SELECT user_id FROM users ORDER BY user_id LIMIT 1")).fetchone()
+    if row:
+        return int(row[0])
+
+    # 库中无用户：创建一个导入专用账号
+    # 密码占位哈希（不可用于登录也不要紧；测试可用 phase3_fixture）
+    row = db.execute(
+        text(
+            """
+            INSERT INTO users (username, password_hash, email, role, is_active)
+            VALUES ('data_importer', '!', 'importer@local', 'admin', true)
+            RETURNING user_id
+            """
+        )
+    ).fetchone()
+    print(f"  已创建导入用户 data_importer，user_id={row[0]}")
+    return int(row[0])
+
+
+def table_exists(db, table_name: str) -> bool:
+    row = db.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = :t
+            LIMIT 1
+            """
+        ),
+        {"t": table_name},
+    ).fetchone()
+    return row is not None
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="导入 with_cameras_capture 会话数据")
+    p.add_argument(
+        "--capture",
+        default=str(os.environ.get("CAPTURE_DIR", DEFAULT_CAPTURE)),
+        help="采集会话根目录（含 with_cameras_capture_*）",
+    )
+    p.add_argument("--excel", default=str(SCENE_EXCEL), help="场景标签 Excel")
+    p.add_argument("--db", default=DB_URL, help="数据库连接串")
+    p.add_argument("--dry-run", action="store_true", help="只扫描/匹配，不写 MinIO/DB")
+    p.add_argument("--limit-groups", type=int, default=0, help="最多导入多少个对齐样本（0=全部）")
+    p.add_argument("--skip-dataset", action="store_true", help="不创建 datasets / dataset_items")
+    p.add_argument("--skip-alignment", action="store_true", help="不写 alignment_groups")
+    return p.parse_args()
+
+
 def extract_timestamp(filename: str) -> float | None:
-    """从文件名提取时间戳: _t000112.040 → 112.040"""
-    m = re.search(r'_t(\d{6})\.(\d{3})', filename)
+    m = re.search(r"_t(\d{6})\.(\d{3})", filename)
     if m:
         return float(f"{int(m.group(1))}.{m.group(2)}")
     return None
 
 
-def read_image_info(fpath: Path) -> dict:
-    """读取图片宽高通道数"""
+def is_usable_file(path: Path) -> bool:
+    """跳过群晖 @eaDir、网盘未落地占位、空文件。"""
+    if any(part.startswith("@") for part in path.parts):
+        return False
     try:
-        img = Image.open(fpath)
-        w, h = img.size
-        c = len(img.getbands())
-        img.close()
-        return {"width": w, "height": h, "channels": c}
-    except Exception:
-        return {"width": 0, "height": 0, "channels": 0}
+        if not path.is_file():
+            return False
+        if path.stat().st_size <= 0:
+            return False
+        return True
+    except OSError:
+        return False
 
 
-def upload_to_minio(local_path: Path, object_name: str) -> str:
-    """上传文件到 MinIO，返回 file_path"""
-    ext = local_path.suffix.lower()
-    content_type = "image/jpeg" if ext in ('.jpg', '.jpeg') else \
-                   "image/png" if ext == '.png' else \
-                   "application/octet-stream"
-    MINIO.fput_object(BUCKET, object_name, str(local_path), content_type=content_type)
-    return f"/{BUCKET}/{object_name}"
+def list_sensor_files(sensor_dir: Path) -> list[tuple[Path, float, str]]:
+    if not sensor_dir.is_dir():
+        return []
+    out: list[tuple[Path, float, str]] = []
+    try:
+        names = sorted(os.listdir(sensor_dir))
+    except OSError:
+        return []
+    for name in names:
+        if name.startswith("@"):
+            continue
+        fpath = sensor_dir / name
+        if not is_usable_file(fpath):
+            continue
+        ts = extract_timestamp(name)
+        if ts is None:
+            continue
+        out.append((fpath, ts, name))
+    return out
 
 
-def insert_resource(db, name: str, modality: str, file_path: str,
-                    captured_at: float, metadata: dict, owner_id: int = ADMIN_ID) -> int:
-    """插入 data_resources 记录，返回 resource_id"""
-    meta_json = json.dumps(metadata, ensure_ascii=False)
-    result = db.execute(
-        text("""
-            INSERT INTO data_resources
-            (name, owner_id, modality, file_path, metadata, captured_at, version, annotation_status, status, created_at, updated_at)
-            VALUES (:name, :owner_id, :modality, :file_path, :metadata, :captured_at, 1, 'unannotated', 'active', NOW(), NOW())
-            RETURNING resource_id
-        """),
-        {
-            "name": name,
-            "owner_id": owner_id,
-            "modality": modality,
-            "file_path": file_path,
-            "metadata": meta_json,
-            "captured_at": captured_at,
-        }
+def discover_segments(capture_dir: Path) -> list[tuple[str, Path]]:
+    """返回 [(part_name, segment_dir), ...]"""
+    found: list[tuple[str, Path]] = []
+    if not capture_dir.is_dir():
+        return found
+
+    # 兼容：根下直接就是 segment_*（旧结构）
+    direct_segs = sorted(
+        [p for p in capture_dir.iterdir() if p.is_dir() and p.name.startswith("segment_")],
+        key=lambda p: p.name,
     )
-    return result.fetchone()[0]
+    if direct_segs:
+        for seg in direct_segs:
+            found.append((".", seg))
+        return found
+
+    parts = sorted(
+        [
+            p
+            for p in capture_dir.iterdir()
+            if p.is_dir() and ("part" in p.name.lower() or p.name.startswith("with_cameras_capture_"))
+        ],
+        key=lambda p: p.name,
+    )
+    # 若没有 part 目录，再扫一层子目录里的 segment
+    if not parts:
+        parts = [p for p in capture_dir.iterdir() if p.is_dir() and not p.name.startswith("@")]
+
+    for part in parts:
+        segs = sorted(
+            [p for p in part.iterdir() if p.is_dir() and p.name.startswith("segment_")],
+            key=lambda p: p.name,
+        )
+        for seg in segs:
+            found.append((part.name, seg))
+    return found
 
 
 def nearest_index(timestamps: list[float], target: float) -> int:
-    """在有序时间戳列表中二分查找最接近 target 的索引"""
     if not timestamps:
         return -1
     idx = bisect_left(timestamps, target)
@@ -108,162 +234,227 @@ def nearest_index(timestamps: list[float], target: float) -> int:
     return idx - 1 if (target - left) <= (right - target) else idx
 
 
-# ─── 主流程 ───
-def main():
-    engine = create_engine(DB_URL)
+def build_groups(
+    sensor_files: dict[str, list[tuple[Path, float, str]]],
+) -> list[list[tuple[Path, float, str, str, str, bool]]]:
+    ir_files = sensor_files.get(IR_NAME, [])
+    vis1_files = sensor_files.get(VIS1_NAME, [])
+    vis2_files = sensor_files.get(VIS2_NAME, [])
+    lidar_files = sensor_files.get(LIDAR_NAME, [])
 
-    # 确保 MinIO 桶存在
-    if not MINIO.bucket_exists(BUCKET):
-        MINIO.make_bucket(BUCKET)
-        print(f"已创建 MinIO 桶: {BUCKET}")
-
-    # ── 1. 扫描所有传感器文件，提取时间戳 ──
-    print("=" * 60)
-    print("阶段 1: 扫描文件 & 解析时间戳")
-    print("=" * 60)
-
-    images_dir = SEGMENT_DIR / "images"
-    pc_dir = SEGMENT_DIR / "pointclouds"
-
-    # {sensor_name: [(filepath, timestamp, filename), ...]}
-    sensor_files: dict[str, list[tuple[Path, float, str]]] = defaultdict(list)
-
-    if images_dir.exists():
-        for sensor_dir in sorted(images_dir.iterdir()):
-            if not sensor_dir.is_dir():
-                continue
-            sensor_name = sensor_dir.name
-            for fpath in sorted(sensor_dir.iterdir()):
-                ts = extract_timestamp(fpath.name)
-                if ts is not None:
-                    sensor_files[sensor_name].append((fpath, ts, fpath.name))
-
-    if pc_dir.exists():
-        for sensor_dir in sorted(pc_dir.iterdir()):
-            if not sensor_dir.is_dir():
-                continue
-            sensor_name = sensor_dir.name
-            for fpath in sorted(sensor_dir.iterdir()):
-                ts = extract_timestamp(fpath.name)
-                if ts is not None:
-                    sensor_files[sensor_name].append((fpath, ts, fpath.name))
-
-    for name, files in sensor_files.items():
-        cfg = SENSOR_CONFIG.get(name, {})
-        print(f"  {name}: {len(files)} 文件 [{cfg.get('modality', '?')}]")
-
-    # ── 2. 时间戳匹配 ──
-    print("\n" + "=" * 60)
-    print("阶段 2: 时间戳最近邻匹配 (红外为基准)")
-    print("=" * 60)
-
-    ir_name = "usb_ir__image_raw"
-    vis1_name = "hikrobot_camera__DA8679037__image_raw"
-    vis2_name = "hikrobot_camera__DA8679038__image_raw"
-    lidar_name = "at360__points"
-
-    ir_files = sensor_files.get(ir_name, [])
-    vis1_files = sensor_files.get(vis1_name, [])
-    vis2_files = sensor_files.get(vis2_name, [])
-    lidar_files = sensor_files.get(lidar_name, [])
-
-    # 提取纯时间戳列表 (已排序)
-    ir_ts = [ts for _, ts, _ in ir_files]
     vis1_ts = [ts for _, ts, _ in vis1_files]
     vis2_ts = [ts for _, ts, _ in vis2_files]
     lidar_ts = [ts for _, ts, _ in lidar_files]
 
-    # 为每个红外匹配最近的可见光
-    # groups[group_id] = [(fpath, ts, filename, sensor_name, modality), ...]
     groups: list[list[tuple[Path, float, str, str, str, bool]]] = []
-
     for ir_fpath, ir_ts_val, ir_fname in ir_files:
-        group: list[tuple[Path, float, str, str, str, bool]] = []
-        # 红外是基准 (primary)
-        group.append((ir_fpath, ir_ts_val, ir_fname, ir_name, "infrared", True))
-
-        # 匹配可见光1
+        group: list[tuple[Path, float, str, str, str, bool]] = [
+            (ir_fpath, ir_ts_val, ir_fname, IR_NAME, "infrared", True)
+        ]
         idx1 = nearest_index(vis1_ts, ir_ts_val)
         if idx1 >= 0:
             fpath, ts_val, fname = vis1_files[idx1]
-            diff = abs(ts_val - ir_ts_val)
-            group.append((fpath, ts_val, fname, vis1_name, "visible", False))
-        else:
-            print(f"  [WARN] 红外 {ir_fname} (t={ir_ts_val:.3f}) 无可见光1匹配")
-
-        # 匹配可见光2
+            group.append((fpath, ts_val, fname, VIS1_NAME, "visible", False))
         idx2 = nearest_index(vis2_ts, ir_ts_val)
         if idx2 >= 0:
             fpath, ts_val, fname = vis2_files[idx2]
-            diff = abs(ts_val - ir_ts_val)
-            group.append((fpath, ts_val, fname, vis2_name, "visible", False))
-        else:
-            print(f"  [WARN] 红外 {ir_fname} (t={ir_ts_val:.3f}) 无可见光2匹配")
-
-        # 匹配点云 (可选)
+            group.append((fpath, ts_val, fname, VIS2_NAME, "visible", False))
         idx_l = nearest_index(lidar_ts, ir_ts_val)
         if idx_l >= 0:
             fpath, ts_val, fname = lidar_files[idx_l]
-            diff = abs(ts_val - ir_ts_val)
-            group.append((fpath, ts_val, fname, lidar_name, "lidar", False))
-
+            group.append((fpath, ts_val, fname, LIDAR_NAME, "lidar", False))
         groups.append(group)
+    return groups
 
-    print(f"  红外基准: {len(ir_files)} 张")
-    print(f"  匹配后样本数: {len(groups)}")
-    matched_vis1 = sum(1 for g in groups for _, _, _, sn, _, _ in g if sn == vis1_name)
-    matched_vis2 = sum(1 for g in groups for _, _, _, sn, _, _ in g if sn == vis2_name)
-    matched_lidar = sum(1 for g in groups for _, _, _, sn, _, _ in g if sn == lidar_name)
-    print(f"  匹配可见光1: {matched_vis1}")
-    print(f"  匹配可见光2: {matched_vis2}")
-    print(f"  匹配点云: {matched_lidar}")
 
-    # 时间偏移统计
-    vis1_diffs = []
-    vis2_diffs = []
-    for g in groups:
-        ir_ts_val = g[0][1]
-        for item in g[1:]:
-            diff = abs(item[1] - ir_ts_val)
-            if item[3] == vis1_name:
-                vis1_diffs.append(diff)
-            elif item[3] == vis2_name:
-                vis2_diffs.append(diff)
-    if vis1_diffs:
-        print(f"  可见光1 时间差: min={min(vis1_diffs):.4f}s  max={max(vis1_diffs):.4f}s  avg={sum(vis1_diffs)/len(vis1_diffs):.4f}s")
-    if vis2_diffs:
-        print(f"  可见光2 时间差: min={min(vis2_diffs):.4f}s  max={max(vis2_diffs):.4f}s  avg={sum(vis2_diffs)/len(vis2_diffs):.4f}s")
+def read_image_info(fpath: Path) -> dict:
+    try:
+        with Image.open(fpath) as img:
+            w, h = img.size
+            c = len(img.getbands())
+        return {"width": w, "height": h, "channels": c}
+    except Exception:
+        return {"width": 0, "height": 0, "channels": 0}
 
-    # ── 3. 上传 MinIO + 写入数据库 ──
-    print("\n" + "=" * 60)
-    print("阶段 3: 上传 MinIO & 写入数据库")
+
+def upload_to_minio(local_path: Path, object_name: str) -> str:
+    ext = local_path.suffix.lower()
+    content_type = (
+        "image/jpeg"
+        if ext in (".jpg", ".jpeg")
+        else "image/png"
+        if ext == ".png"
+        else "application/octet-stream"
+    )
+    MINIO.fput_object(BUCKET, object_name, str(local_path), content_type=content_type)
+    return f"/{BUCKET}/{object_name}"
+
+
+def insert_resource(
+    db,
+    name: str,
+    modality: str,
+    file_path: str,
+    captured_at: float,
+    metadata: dict,
+    owner_id: int,
+) -> int:
+    meta_json = json.dumps(metadata, ensure_ascii=False)
+    result = db.execute(
+        text(
+            """
+            INSERT INTO data_resources
+            (name, owner_id, modality, file_path, metadata, captured_at, version,
+             annotation_status, status, created_at, updated_at)
+            VALUES
+            (:name, :owner_id, :modality, :file_path, CAST(:metadata AS jsonb), :captured_at, 1,
+             'unannotated', 'active', NOW(), NOW())
+            RETURNING resource_id
+            """
+        ),
+        {
+            "name": name,
+            "owner_id": owner_id,
+            "modality": modality,
+            "file_path": file_path,
+            "metadata": meta_json,
+            "captured_at": captured_at,
+        },
+    )
+    return result.fetchone()[0]
+
+
+def scan_segment(segment_dir: Path) -> dict[str, list[tuple[Path, float, str]]]:
+    sensor_files: dict[str, list[tuple[Path, float, str]]] = defaultdict(list)
+    images_dir = segment_dir / "images"
+    pc_dir = segment_dir / "pointclouds"
+    if images_dir.is_dir():
+        for sensor_name in SENSOR_CONFIG:
+            if SENSOR_CONFIG[sensor_name]["modality"] == "lidar":
+                continue
+            files = list_sensor_files(images_dir / sensor_name)
+            if files:
+                sensor_files[sensor_name] = files
+    if pc_dir.is_dir():
+        files = list_sensor_files(pc_dir / LIDAR_NAME)
+        if files:
+            sensor_files[LIDAR_NAME] = files
+    return sensor_files
+
+
+def main() -> None:
+    args = parse_args()
+    capture_dir = Path(args.capture)
+    if not capture_dir.is_absolute():
+        capture_dir = BASE_DIR / capture_dir
+    if not capture_dir.is_dir():
+        raise SystemExit(f"采集目录不存在: {capture_dir}")
+
+    batch_id = infer_batch_id_from_path(capture_dir) or capture_dir.name
+    print("=" * 60)
+    print(f"采集会话: {capture_dir}")
+    print(f"batch_id: {batch_id}")
     print("=" * 60)
 
+    print("阶段 0: 加载场景 Excel")
+    folder_tags: dict = {}
+    try:
+        folder_tags = load_excel_folder_tags(args.excel)
+        scene_tags = lookup_tags_for_path(capture_dir, folder_tags, fallback_batch_id=batch_id)
+        print(f"  Excel: {args.excel}")
+        print(f"  会话标签数: {len(folder_tags)}")
+        print(f"  本会话标签: { {k: scene_tags.get(k) for k in ('weather','time_of_day','terrain','obstacle','scene') if k in scene_tags} }")
+    except Exception as e:
+        scene_tags = {"batch_id": batch_id}
+        print(f"  [WARN] Excel 未加载: {e}")
+
+    segments = discover_segments(capture_dir)
+    if not segments:
+        raise SystemExit(f"未找到 segment_* 目录: {capture_dir}")
+    print(f"\n发现 segment: {len(segments)} 个")
+    for part, seg in segments:
+        print(f"  - {part} / {seg.name}")
+
+    # 汇总所有对齐组
+    all_groups: list[tuple[str, str, list]] = []  # part, segment_name, group
+    for part_name, segment_dir in segments:
+        sensor_files = scan_segment(segment_dir)
+        print(f"\n扫描 {part_name}/{segment_dir.name}:")
+        for name, files in sensor_files.items():
+            mod = SENSOR_CONFIG.get(name, {}).get("modality", "?")
+            print(f"  {name}: {len(files)} [{mod}]")
+        if not sensor_files.get(IR_NAME):
+            print("  [SKIP] 无可用红外文件")
+            continue
+        groups = build_groups(sensor_files)
+        print(f"  对齐组: {len(groups)}")
+        for g in groups:
+            all_groups.append((part_name, segment_dir.name, g))
+
+    if args.limit_groups and args.limit_groups > 0:
+        all_groups = all_groups[: args.limit_groups]
+        print(f"\n已限制为前 {len(all_groups)} 个对齐组")
+
+    print(f"\n合计对齐样本: {len(all_groups)}")
+    if args.dry_run:
+        # 统计模态覆盖
+        mod_count = defaultdict(int)
+        for _, _, g in all_groups:
+            for *_, modality, _ in g:
+                mod_count[modality] += 1
+        print("dry-run 模态资源计数:", dict(mod_count))
+        print("dry-run 完成（未写库）")
+        return
+
+    if not MINIO.bucket_exists(BUCKET):
+        MINIO.make_bucket(BUCKET)
+        print(f"已创建 MinIO 桶: {BUCKET}")
+
+    engine = create_engine(args.db)
     db = engine.connect()
+    owner_id = ensure_owner_id(db, ADMIN_ID)
+    print(f"导入归属用户 owner_id={owner_id}")
+
+    skip_alignment = args.skip_alignment
+    if not skip_alignment and not table_exists(db, "alignment_groups"):
+        print("  [WARN] 表 alignment_groups 不存在，自动跳过对齐组写入（不影响场景/模态筛选）")
+        skip_alignment = True
+    skip_dataset = args.skip_dataset
+    if not skip_dataset and not table_exists(db, "datasets"):
+        print("  [WARN] 表 datasets 不存在，自动跳过数据集写入")
+        skip_dataset = True
+
     total_uploaded = 0
     total_resources = 0
-
-    # 用于后续创建数据集
     all_resource_ids: list[int] = []
+    # 用「库内已有最大 sample_group + 1」起编，避免多会话都从 1 编号导致前端误合并
+    sample_group_id = 0
+    try:
+        row = db.execute(text(
+            "SELECT COALESCE(MAX((metadata->>'sample_group')::int), 0) FROM data_resources "
+            "WHERE metadata->>'sample_group' ~ '^[0-9]+$'"
+        )).scalar()
+        sample_group_id = int(row or 0)
+    except Exception:
+        sample_group_id = 0
+    print(f"  sample_group 起始序号: {sample_group_id + 1}")
 
     try:
-        for i, group in enumerate(groups):
-            group_id = i + 1  # 1-based
-            if (i + 1) % 200 == 0:
-                print(f"  进度: {i+1}/{len(groups)}")
+        print("\n阶段 3: 上传 MinIO & 写入数据库")
+        for i, (part_name, segment_name, group) in enumerate(all_groups):
+            sample_group_id += 1
+            if sample_group_id % 100 == 0 or sample_group_id == 1:
+                print(f"  进度: {sample_group_id}/{len(all_groups)}")
 
-            resource_ids_in_group = []
-
+            resource_ids_in_group: list[int] = []
             for fpath, ts_val, fname, sensor_name, modality, is_primary in group:
-                # 上传 MinIO
-                object_name = f"segment/{sensor_name}/{fname}"
+                object_name = f"{batch_id}/{part_name}/{segment_name}/{sensor_name}/{fname}"
                 file_path = upload_to_minio(fpath, object_name)
                 total_uploaded += 1
 
-                # 读取图片信息
-                img_info = read_image_info(fpath)
-
-                # 写入 data_resources
+                img_info = read_image_info(fpath) if modality != "lidar" else {
+                    "width": 0, "height": 0, "channels": 0
+                }
                 metadata = {
                     "width": img_info["width"],
                     "height": img_info["height"],
@@ -271,106 +462,140 @@ def main():
                     "file_size": f"{fpath.stat().st_size // 1024}KB",
                     "device": SENSOR_CONFIG.get(sensor_name, {}).get("device", ""),
                     "sensor": sensor_name,
-                    "segment": "001",
+                    "part": part_name,
+                    "segment": segment_name,
                     "timestamp_offset": ts_val,
-                    "sample_group": group_id,
+                    "sample_group": sample_group_id,
                     "is_primary": is_primary,
+                    "modality": modality,
                 }
+                # 会话级场景标签（Excel）
+                metadata.update(scene_tags)
+                metadata["batch_id"] = batch_id
 
                 rid = insert_resource(
-                    db, name=fname, modality=modality,
-                    file_path=file_path, captured_at=ts_val,
+                    db,
+                    name=fname,
+                    modality=modality,
+                    file_path=file_path,
+                    captured_at=ts_val,
                     metadata=metadata,
+                    owner_id=owner_id,
                 )
                 resource_ids_in_group.append(rid)
                 total_resources += 1
 
-            # 创建 alignment_group
-            ir_item = group[0]
-            result = db.execute(
-                text("""
-                    INSERT INTO alignment_groups (strategy, params, report, created_by, created_at)
-                    VALUES ('nearest_neighbor', :params, :report, :created_by, NOW())
-                    RETURNING group_id
-                """),
-                {
-                    "params": json.dumps({
-                        "base_sensor": "infrared",
-                        "base_timestamp": ir_item[1],
-                        "matched_sensors": list(set(item[3] for item in group[1:])),
-                    }),
-                    "report": json.dumps({
-                        "time_diffs": {item[3]: round(abs(item[1] - ir_item[1]), 4) for item in group[1:]},
-                    }),
-                    "created_by": ADMIN_ID,
-                }
-            )
-            ag_id = result.fetchone()[0]
-
-            # 写入 alignment_group_items
-            for fpath, ts_val, fname, sensor_name, modality, is_primary in group:
-                rid_for_ag = resource_ids_in_group[group.index((fpath, ts_val, fname, sensor_name, modality, is_primary))]
-                db.execute(
-                    text("""
-                        INSERT INTO alignment_group_items (group_id, resource_id, sensor_type, is_primary)
-                        VALUES (:group_id, :resource_id, :sensor_type, :is_primary)
-                    """),
+            if not skip_alignment:
+                ir_item = group[0]
+                result = db.execute(
+                    text(
+                        """
+                        INSERT INTO alignment_groups (strategy, params, report, created_by, created_at)
+                        VALUES ('nearest_neighbor', CAST(:params AS jsonb), CAST(:report AS jsonb), :created_by, NOW())
+                        RETURNING group_id
+                        """
+                    ),
                     {
-                        "group_id": ag_id,
-                        "resource_id": rid_for_ag,
-                        "sensor_type": modality,
-                        "is_primary": is_primary,
-                    }
+                        "params": json.dumps(
+                            {
+                                "base_sensor": "infrared",
+                                "base_timestamp": ir_item[1],
+                                "batch_id": batch_id,
+                                "part": part_name,
+                                "segment": segment_name,
+                                "matched_sensors": list({item[3] for item in group[1:]}),
+                            },
+                            ensure_ascii=False,
+                        ),
+                        "report": json.dumps(
+                            {
+                                "time_diffs": {
+                                    item[3]: round(abs(item[1] - ir_item[1]), 4)
+                                    for item in group[1:]
+                                }
+                            },
+                            ensure_ascii=False,
+                        ),
+                        "created_by": owner_id,
+                    },
                 )
+                ag_id = result.fetchone()[0]
+                for j, (fpath, ts_val, fname, sensor_name, modality, is_primary) in enumerate(group):
+                    db.execute(
+                        text(
+                            """
+                            INSERT INTO alignment_group_items
+                            (group_id, resource_id, sensor_type, is_primary)
+                            VALUES (:group_id, :resource_id, :sensor_type, :is_primary)
+                            """
+                        ),
+                        {
+                            "group_id": ag_id,
+                            "resource_id": resource_ids_in_group[j],
+                            "sensor_type": modality,
+                            "is_primary": is_primary,
+                        },
+                    )
 
             all_resource_ids.extend(resource_ids_in_group)
 
-        # ── 4. 创建数据集 ──
-        print("\n" + "=" * 60)
-        print("阶段 4: 创建数据集")
-        print("=" * 60)
-
-        result = db.execute(
-            text("""
-                INSERT INTO datasets (name, description, owner_id, filters, version, status, visibility, review_status, created_at, updated_at)
-                VALUES (:name, :desc, :owner_id, :filters, 'v1.0', 'published', 'public', 'approved', NOW(), NOW())
-                RETURNING dataset_id
-            """),
-            {
-                "name": "多模态低空场景数据集 (时间对齐)",
-                "desc": f"以红外时间戳为基准，最近邻匹配可见光。共 {len(groups)} 个样本，{total_resources} 个数据资源。",
-                "owner_id": ADMIN_ID,
-                "filters": json.dumps({
-                    "modalities": ["visible", "infrared", "lidar"],
-                    "match_strategy": "nearest_neighbor",
-                    "base_sensor": "infrared",
-                }),
-            }
-        )
-        ds_id = result.fetchone()[0]
-        print(f"  数据集 ID: {ds_id}")
-
-        # 填充 dataset_items (全部放入 train 子集)
-        for rid in all_resource_ids:
-            db.execute(
-                text("""
-                    INSERT INTO dataset_items (dataset_id, resource_id, subset, added_at)
-                    VALUES (:dataset_id, :resource_id, 'train', NOW())
-                """),
-                {"dataset_id": ds_id, "resource_id": rid}
+        ds_id = None
+        if not skip_dataset and all_resource_ids:
+            print("\n阶段 4: 创建数据集")
+            result = db.execute(
+                text(
+                    """
+                    INSERT INTO datasets
+                    (name, description, owner_id, filters, version, status, visibility,
+                     review_status, created_at, updated_at)
+                    VALUES
+                    (:name, :desc, :owner_id, CAST(:filters AS jsonb), 1, 'published', 'public',
+                     'approved', NOW(), NOW())
+                    RETURNING dataset_id
+                    """
+                ),
+                {
+                    "name": f"多模态数据集 {batch_id}",
+                    "desc": (
+                        f"会话 {batch_id}，红外对齐。样本 {len(all_groups)}，"
+                        f"资源 {total_resources}。"
+                    ),
+                    "owner_id": owner_id,
+                    "filters": json.dumps(
+                        {
+                            "batch_id": batch_id,
+                            "modalities": ["visible", "infrared", "lidar"],
+                            "match_strategy": "nearest_neighbor",
+                            **{k: scene_tags[k] for k in ("weather", "time_of_day", "terrain", "obstacle", "scene") if k in scene_tags},
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
             )
-        print(f"  数据集项数: {len(all_resource_ids)}")
+            ds_id = result.fetchone()[0]
+            for rid in all_resource_ids:
+                db.execute(
+                    text(
+                        """
+                        INSERT INTO dataset_items (dataset_id, resource_id, subset, added_at)
+                        VALUES (:dataset_id, :resource_id, 'train', NOW())
+                        """
+                    ),
+                    {"dataset_id": ds_id, "resource_id": rid},
+                )
+            print(f"  数据集 ID: {ds_id}，条目 {len(all_resource_ids)}")
 
         db.commit()
-
         print("\n" + "=" * 60)
-        print(f">> 完成!")
-        print(f"   样本数 (对齐组): {len(groups)}")
-        print(f"   上传 MinIO: {total_uploaded} 个文件")
-        print(f"   数据库资源: {total_resources} 条")
-        print(f"   数据集 ID: {ds_id}")
+        print("完成")
+        print(f"  对齐样本: {len(all_groups)}")
+        print(f"  MinIO 上传: {total_uploaded}")
+        print(f"  DB 资源: {total_resources}")
+        if ds_id:
+            print(f"  数据集 ID: {ds_id}")
+        print(f"  场景标签: weather={scene_tags.get('weather')} terrain={scene_tags.get('terrain')} "
+              f"obstacle={scene_tags.get('obstacle')} time={scene_tags.get('time_of_day')}")
         print("=" * 60)
-
     except Exception as e:
         db.rollback()
         print(f"\n[ERROR] {e}")

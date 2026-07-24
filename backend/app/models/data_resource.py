@@ -69,6 +69,14 @@ class DataResource(Base):
             query = query.filter(cls.status == status)
         if scene := filters.get("scene"):
             query = query.filter(cls.meta_info["scene"].astext == scene)
+        if weather := filters.get("weather"):
+            query = query.filter(cls.meta_info["weather"].astext == weather)
+        if time_of_day := filters.get("time_of_day"):
+            query = query.filter(cls.meta_info["time_of_day"].astext == time_of_day)
+        if terrain := filters.get("terrain"):
+            query = query.filter(cls.meta_info["terrain"].astext == terrain)
+        if obstacle := filters.get("obstacle"):
+            query = query.filter(cls.meta_info["obstacle"].astext == obstacle)
         if start_time := filters.get("start_time"):
             query = query.filter(cls.created_at >= start_time)
         if end_time := filters.get("end_time"):
@@ -105,6 +113,14 @@ class DataResource(Base):
             query = query.filter(cls.status == status)
         if scene := filters.get("scene"):
             query = query.filter(cls.meta_info["scene"].astext == scene)
+        if weather := filters.get("weather"):
+            query = query.filter(cls.meta_info["weather"].astext == weather)
+        if time_of_day := filters.get("time_of_day"):
+            query = query.filter(cls.meta_info["time_of_day"].astext == time_of_day)
+        if terrain := filters.get("terrain"):
+            query = query.filter(cls.meta_info["terrain"].astext == terrain)
+        if obstacle := filters.get("obstacle"):
+            query = query.filter(cls.meta_info["obstacle"].astext == obstacle)
         if sample_group := filters.get("sample_group"):
             query = query.filter(cls.meta_info["sample_group"].astext == str(sample_group))
         if batch_id := filters.get("batch_id"):

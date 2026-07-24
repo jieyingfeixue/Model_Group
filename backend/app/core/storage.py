@@ -1,6 +1,5 @@
 """对象存储抽象层 — MinIO 上传 / 下载 / URL 生成"""
 
-from datetime import timedelta
 from io import BytesIO
 
 from minio import Minio
@@ -72,45 +71,32 @@ def get_file_url(object_path: str, expires: int = 3600) -> str:
         return ""
 
     bucket, object_name = parts[0], parts[1]
-    return _client.presigned_get_object(
-        bucket, object_name, expires=timedelta(seconds=expires)
-    )
+    return _client.presigned_get_object(bucket, object_name, expires=expires)
 
 
-def download_file(object_path: str, bucket_name: str | None = None) -> bytes:
-    """从 MinIO 下载文件内容。
+def get_file_bytes(object_path: str) -> bytes | None:
+    """从 MinIO 下载文件内容并返回字节。
 
     Args:
-        object_path: 完整路径（如 `/detection-platform/models/...`）或纯对象名
-        bucket_name: 可选桶名；未指定时从路径首段解析，否则用默认桶
+        object_path: 对象完整路径
 
     Returns:
-        文件字节；不存在时抛出 FileNotFoundError
+        文件字节内容，不存在时返回 None
     """
     path = object_path.lstrip("/")
-    if bucket_name:
-        bucket = bucket_name
-        prefix = bucket + "/"
-        object_name = path[len(prefix) :] if path.startswith(prefix) else path
-    else:
-        parts = path.split("/", 1)
-        if len(parts) == 2 and parts[0] == settings.MINIO_BUCKET:
-            bucket, object_name = parts[0], parts[1]
-        elif len(parts) == 2:
-            bucket, object_name = parts[0], parts[1]
-        else:
-            bucket = settings.MINIO_BUCKET
-            object_name = path
+    parts = path.split("/", 1)
+    if len(parts) != 2:
+        return None
 
+    bucket, object_name = parts[0], parts[1]
     try:
         response = _client.get_object(bucket, object_name)
-        try:
-            return response.read()
-        finally:
-            response.close()
-            response.release_conn()
-    except S3Error as exc:
-        raise FileNotFoundError(f"MinIO 对象不存在: {bucket}/{object_name}") from exc
+        data = response.read()
+        response.close()
+        response.release_conn()
+        return data
+    except S3Error:
+        return None
 
 
 def delete_file(object_path: str) -> None:

@@ -3,13 +3,13 @@
   <div class="top-bar">
     <el-button text @click="$router.back()">← 返回</el-button>
   </div>
-  <div v-if="!sample" class="loading">加载中...</div>
+  <div v-if="!sample" class="loading">{{ loadError || '加载中...' }}</div>
   <div v-else>
     <div class="hero">
-      <h1>样本 #{{ sample.sample_id }}</h1>
-      <p>{{ sceneLabel(sample.scene) }} · {{ sample.time_of_day === 'night' ? '夜间' : '白天' }} · {{ sample.weather }} · {{ sample.batch_id }}</p>
+      <h1>样本 #{{ sample.group_no ?? sample.sample_id }}</h1>
+      <p>{{ sceneLabel(sample.scene) }} · {{ sample.time_of_day === 'night' ? '夜间' : (sample.time_of_day === 'day' ? '白天' : '-') }} · {{ sample.weather }} · {{ sample.batch_id }}</p>
     </div>
-    <div class="modality-grid" :class="'cols-' + sample.images.length">
+    <div class="modality-grid" :class="'cols-' + Math.min(sample.images.length, 4)">
       <div v-for="img in sample.images" :key="img.resource_id" class="modality-card"
         @click="$router.push({name:'DataDetail', params:{id:img.resource_id}})" style="cursor:pointer;">
         <div class="mod-header">
@@ -41,6 +41,7 @@ import { getDataList } from '@/api/data'
 
 const route = useRoute()
 const sample = ref(null)
+const loadError = ref('')
 
 function modLabel(m) {
   const map = { visible: '可见光', infrared: '红外', mmwave: '毫米波', lidar: '激光雷达' }
@@ -51,26 +52,66 @@ function sceneLabel(s) {
   return map[s] || s
 }
 
+function parseSampleId(raw) {
+  const id = decodeURIComponent(String(raw || ''))
+  if (id.includes('::')) {
+    const idx = id.lastIndexOf('::')
+    return { batch_id: id.slice(0, idx), sample_group: id.slice(idx + 2) }
+  }
+  return { batch_id: null, sample_group: id }
+}
+
 onMounted(async () => {
   try {
-    const { data } = await getDataList({ page: 1, size: 6000 })
-    const items = (data.items || []).filter(item => item.meta_info?.sample_group)
-    // 按 sample_group 分组
-    const groupMap = {}
+    const { batch_id, sample_group } = parseSampleId(route.params.id)
+    if (!sample_group && sample_group !== 0) {
+      loadError.value = '无效的样本 ID'
+      return
+    }
+    const params = {
+      page: 1,
+      size: 100,
+      sample_group: Number(sample_group),
+    }
+    if (batch_id) params.batch_id = batch_id
+
+    const { data } = await getDataList(params)
+    const items = data?.items || []
+    if (!items.length) {
+      loadError.value = '未找到该样本（可能尚未导入或 ID 已失效）'
+      return
+    }
+
+    const seenSensor = new Set()
+    const images = []
+    let meta = {}
     items.forEach(item => {
-      const gid = item.meta_info.sample_group
-      if (!groupMap[gid]) groupMap[gid] = { sample_id: gid, scene: item.meta_info.scene || '-', images: [], batch_id: item.meta_info.batch_id || '-', modality_count: 0 }
-      groupMap[gid].images.push({
+      meta = item.meta_info || meta
+      const sensorKey = item.meta_info?.sensor || `${item.modality}:${item.name}`
+      if (seenSensor.has(sensorKey)) return
+      seenSensor.add(sensorKey)
+      images.push({
         resource_id: item.resource_id,
         modality: item.modality,
         name: item.name,
         thumbnail: `/api/images/${item.resource_id}`,
         annotation_status: item.annotation_status,
       })
-      groupMap[gid].modality_count = groupMap[gid].images.length
     })
-    sample.value = groupMap[Number(route.params.id)]
-  } catch { /* backend not ready */ }
+
+    sample.value = {
+      sample_id: route.params.id,
+      group_no: meta.sample_group,
+      scene: meta.scene || '-',
+      weather: meta.weather,
+      time_of_day: meta.time_of_day,
+      batch_id: meta.batch_id || batch_id || '-',
+      images,
+      modality_count: images.length,
+    }
+  } catch {
+    loadError.value = '加载失败'
+  }
 })
 </script>
 
@@ -98,8 +139,7 @@ onMounted(async () => {
 .mod-badge.mmwave{ background:#7c3aed; }
 .mod-badge.lidar{ background:#0891b2; }
 .mod-image{ height:320px; background:#f8fafc; display:flex; align-items:center; justify-content:center; }
-.mod-image img{ width:100%; height:100%; object-fit:contain; }
-.mod-info{ padding:12px 16px; font-size:13px; color:#64748b; }
-.lidar-placeholder{ display:flex; align-items:center; justify-content:center;
-  height:100%; font-size:18px; font-weight:600; color:#fff; background:#0891b2; }
+.mod-image img{ max-width:100%; max-height:100%; object-fit:contain; }
+.lidar-placeholder{ font-size:18px; color:#64748b; }
+.mod-info{ padding:10px 16px; color:#64748b; font-size:13px; }
 </style>

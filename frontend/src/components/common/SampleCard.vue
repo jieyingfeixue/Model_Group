@@ -18,10 +18,10 @@
       </div>
     </div>
     <div class="card-info">
-      <div class="sample-name">样本 #{{ sample.sample_id }}</div>
+      <div class="sample-name">样本 #{{ sample.group_no ?? sample.sample_id }}</div>
       <div class="sample-meta">
         <span>{{ sceneLabel(sample.scene) }}</span>
-        <span>{{ sample.time_of_day === 'night' ? '夜间' : '白天' }}</span>
+        <span>{{ sample.time_of_day === 'night' ? '夜间' : (sample.time_of_day === 'day' ? '白天' : '-') }}</span>
         <span>{{ sample.modality_count }} 模态</span>
       </div>
       <div class="sample-batch">{{ sample.batch_id }}</div>
