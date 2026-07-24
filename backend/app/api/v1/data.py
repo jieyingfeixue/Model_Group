@@ -9,7 +9,14 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.models.data_resource import DataResource
-from app.schemas.data_resource import DataResourceCreate, DataResourceResponse
+from app.schemas.data_resource import (
+    DataResourceCreate,
+    DataResourceMetadataUpdateRequest,
+    DataResourceResponse,
+    DataResourceVersionListResponse,
+    DataAlignRequest,
+    DataAlignResponse,
+)
 from app.services import normal_data_service
 
 router = APIRouter(tags=["Data"])
@@ -156,3 +163,49 @@ def get_thumbnail(resource_id: int, size: int = 240, db: Session = Depends(get_d
         return StreamingResponse(buf, media_type="image/jpeg")
     except Exception:
         raise HTTPException(status_code=404, detail="Image not found")
+
+
+# ──── §5 扩展：详情 / 版本 / 元信息更新 / 多模态对齐 ────
+
+
+@router.get("/data/{resource_id}", response_model=DataResourceResponse)
+def get_data_detail(resource_id: int, db: Session = Depends(get_db)):
+    """获取数据资源详情"""
+    resource = normal_data_service.get_data_detail(db, resource_id)
+    if resource is None:
+        raise HTTPException(status_code=404, detail="数据资源不存在")
+    return DataResourceResponse.model_validate(resource)
+
+
+@router.get("/data/{resource_id}/versions")
+def get_data_versions(resource_id: int, db: Session = Depends(get_db)):
+    """获取数据资源版本列表"""
+    result = normal_data_service.get_data_versions(db, resource_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="数据资源不存在")
+    return result
+
+
+@router.put("/data/{resource_id}/metadata", response_model=DataResourceResponse)
+def update_data_metadata(
+    resource_id: int,
+    body: DataResourceMetadataUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新数据资源元信息（合并模式，版本号自动递增）"""
+    resource = normal_data_service.update_data_metadata(db, resource_id, body.meta_info)
+    if resource is None:
+        raise HTTPException(status_code=404, detail="数据资源不存在")
+    return DataResourceResponse.model_validate(resource)
+
+
+@router.post("/data/align")
+def align_data(
+    body: DataAlignRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """多模态帧对齐：按 sample_group 将同一时刻的多模态数据分组"""
+    result = normal_data_service.align_multi_modal(db, body.resource_ids)
+    return result

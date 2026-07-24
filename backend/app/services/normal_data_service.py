@@ -102,6 +102,79 @@ def upload_data(
     return resources
 
 
+def get_data_detail(db: Session, resource_id: int) -> DataResource | None:
+    """获取单个数据资源详情"""
+    return db.query(DataResource).filter(DataResource.resource_id == resource_id).first()
+
+
+def get_data_versions(db: Session, resource_id: int) -> dict[str, Any]:
+    """获取数据资源版本历史。
+
+    当前版本号记录在 DataResource.version，历史版本需从 data_versions 表读取。
+    Phase1 返回当前版本信息；Phase3 扩展为完整版本链。
+    """
+    resource = db.query(DataResource).filter(DataResource.resource_id == resource_id).first()
+    if resource is None:
+        return None
+    return {
+        "resource_id": resource_id,
+        "versions": [
+            {
+                "version": resource.version,
+                "updated_at": resource.updated_at.isoformat() if resource.updated_at else None,
+            }
+        ],
+        "current_version": resource.version,
+    }
+
+
+def update_data_metadata(
+    db: Session, resource_id: int, meta_info: dict[str, Any]
+) -> DataResource | None:
+    """更新数据资源元信息（合并模式），版本号自动递增"""
+    return DataResource.update_metadata(db, resource_id, meta_info)
+
+
+def align_multi_modal(
+    db: Session, resource_ids: list[int]
+) -> dict[str, Any]:
+    """多模态帧对齐：按 sample_group 将同一时刻的多模态数据分组。
+
+    返回按 sample_group 分组的结果，标注每组的模态类型。
+    """
+    resources = (
+        db.query(DataResource)
+        .filter(DataResource.resource_id.in_(resource_ids))
+        .all()
+    )
+
+    found_ids = {r.resource_id for r in resources}
+    ungrouped = [rid for rid in resource_ids if rid not in found_ids]
+
+    # 按 sample_group 分组
+    groups: dict[str, dict[str, Any]] = {}
+    for r in resources:
+        meta = r.meta_info or {}
+        sg = str(meta.get("sample_group", f"_single_{r.resource_id}"))
+        if sg not in groups:
+            groups[sg] = {
+                "sample_group": sg,
+                "modalities": [],
+                "resource_ids": [],
+                "scene": meta.get("scene"),
+                "time_of_day": meta.get("time_of_day"),
+            }
+        if r.modality not in groups[sg]["modalities"]:
+            groups[sg]["modalities"].append(r.modality)
+        groups[sg]["resource_ids"].append(r.resource_id)
+
+    return {
+        "groups": list(groups.values()),
+        "total_groups": len(groups),
+        "ungrouped": ungrouped,
+    }
+
+
 def list_my_data(
     db: Session,
     owner_id: int,

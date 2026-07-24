@@ -66,3 +66,71 @@ class AnnotationSaveResponse(BaseModel):
     resource_id: int
     version: int
     message: str = "保存成功"
+
+
+# ──── 标注提交 ────
+
+
+class AnnotationSubmitRequest(BaseModel):
+    """提交标注结果请求（标记该图片标注完成）"""
+    pass
+
+
+class AnnotationSubmitResponse(BaseModel):
+    """标注提交响应"""
+    annotation_id: int
+    task_id: int
+    resource_id: int
+    version: int
+    message: str = "提交成功"
+
+
+# ──── 标注历史 ────
+
+
+class AnnotationHistoryItem(BaseModel):
+    """标注历史条目"""
+    annotation_id: int
+    task_id: int
+    resource_id: int
+    version: int
+    bboxes: list[dict[str, Any]]
+    review_status: str
+    created_by: int
+    updated_at: datetime | str | None
+
+    model_config = {"from_attributes": True}
+
+
+class AnnotationHistoryResponse(BaseModel):
+    """标注历史响应"""
+    resource_id: int
+    task_id: int
+    history: list[AnnotationHistoryItem]
+    current_version: int
+
+
+# ──── 任务进度 ────
+
+
+class AnnotationProgressResponse(BaseModel):
+    """标注任务进度响应"""
+    task_id: int
+    total_images: int
+    annotated: int
+    reviewed: int
+    progress_pct: float
+
+
+# ──── 下一个待标注 ────
+
+
+class AnnotationNextImageResponse(BaseModel):
+    """下一个待标注图片响应"""
+    resource_id: int
+    name: str
+    modality: str
+    file_path: str
+    has_existing_annotation: bool = False
+    existing_annotation_id: int | None = None
+    existing_bboxes: list[dict[str, Any]] | None = None

@@ -61,3 +61,58 @@ class RoleUpdateRequest(BaseModel):
 class StatusUpdateRequest(BaseModel):
     """冻结/解冻请求"""
     is_active: bool = Field(..., description="true=激活, false=冻结")
+
+
+# ──── 推理审批 ────
+
+class InferTaskPendingItem(BaseModel):
+    """推理审批待处理项"""
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
+
+    task_id: int
+    model_id: int
+    dataset_id: int | None = None
+    image_id: int | None = None
+    status: str
+    created_by: int
+    created_at: datetime | str | None
+
+
+class InferTaskPendingListResponse(BaseModel):
+    """推理审批待处理列表"""
+    items: list[InferTaskPendingItem]
+    total: int
+    page: int = 1
+    size: int = 20
+
+
+# ──── 天梯治理 ────
+
+class LeaderboardGovernanceItem(BaseModel):
+    """天梯治理条目（含管理操作信息）"""
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
+
+    result_id: int
+    model_id: int
+    model_name: str | None = None
+    dataset_id: int
+    mAP50: float | None = None
+    mAP50_95: float | None = None
+    is_public: bool = False
+    is_invalidated: bool = False
+    created_at: datetime | str | None = None
+
+
+class LeaderboardGovernanceResponse(BaseModel):
+    """天梯治理列表"""
+    items: list[LeaderboardGovernanceItem]
+    total: int
+    page: int = 1
+    size: int = 20
+
+
+# ──── 作弊下架 ────
+
+class EvalResultInvalidateRequest(BaseModel):
+    """作弊下架请求"""
+    reason: str = Field(..., min_length=1, description="下架原因说明")

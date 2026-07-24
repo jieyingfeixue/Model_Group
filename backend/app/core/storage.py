@@ -74,6 +74,31 @@ def get_file_url(object_path: str, expires: int = 3600) -> str:
     return _client.presigned_get_object(bucket, object_name, expires=expires)
 
 
+def get_file_bytes(object_path: str) -> bytes | None:
+    """从 MinIO 下载文件内容并返回字节。
+
+    Args:
+        object_path: 对象完整路径
+
+    Returns:
+        文件字节内容，不存在时返回 None
+    """
+    path = object_path.lstrip("/")
+    parts = path.split("/", 1)
+    if len(parts) != 2:
+        return None
+
+    bucket, object_name = parts[0], parts[1]
+    try:
+        response = _client.get_object(bucket, object_name)
+        data = response.read()
+        response.close()
+        response.release_conn()
+        return data
+    except S3Error:
+        return None
+
+
 def delete_file(object_path: str) -> None:
     """从 MinIO 删除文件。
 

@@ -81,3 +81,51 @@ class DataResourceResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+# ──── 元信息更新 ────
+
+
+class DataResourceMetadataUpdateRequest(BaseModel):
+    """更新数据资源元信息请求"""
+    meta_info: dict[str, Any] = Field(..., description="要合并的元信息字段（与现有字段合并）")
+
+
+# ──── 版本 ────
+
+
+class DataResourceVersionItem(BaseModel):
+    """数据资源版本条目"""
+    version: int
+    updated_at: datetime | str | None
+
+
+class DataResourceVersionListResponse(BaseModel):
+    """数据资源版本列表"""
+    resource_id: int
+    versions: list[DataResourceVersionItem]
+    current_version: int
+
+
+# ──── 多模态对齐 ────
+
+
+class DataAlignRequest(BaseModel):
+    """多模态帧对齐请求"""
+    resource_ids: list[int] = Field(..., min_length=1, description="待对齐的数据资源 ID 列表")
+
+
+class DataAlignGroup(BaseModel):
+    """单个对齐组"""
+    sample_group: str
+    modalities: list[str]
+    resource_ids: list[int]
+    scene: str | None = None
+    time_of_day: str | None = None
+
+
+class DataAlignResponse(BaseModel):
+    """多模态帧对齐结果"""
+    groups: list[DataAlignGroup]
+    total_groups: int
+    ungrouped: list[int] = Field(default_factory=list, description="未能成组的资源 ID")

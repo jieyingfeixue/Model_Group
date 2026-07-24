@@ -10,10 +10,15 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.dataset import (
     DatasetCreateRequest,
+    DatasetDiffResponse,
     DatasetListResponse,
+    DatasetPreviewRequest,
+    DatasetPreviewResponse,
     DatasetPublishRequest,
     DatasetResponse,
     DatasetSplitRequest,
+    DatasetVersionListResponse,
+    DatasetVisibilityRequest,
 )
 from app.services import normal_dataset_service
 
@@ -186,4 +191,112 @@ def submit_for_review(
 ):
     """提交数据集审核（需先冻结）"""
     result = normal_dataset_service.submit_for_review(db, dataset_id)
+    return DatasetResponse(**result)
+
+
+# ──── DELETE /api/datasets/{dataset_id} ────
+
+@router.delete("/{dataset_id}", status_code=204)
+def delete_dataset(
+    dataset_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """物理删除数据集"""
+    normal_dataset_service.delete_dataset(db, dataset_id)
+
+
+# ──── §6 扩展：预览 / 可见性 / 版本 / diff / 导出 / 复制 ────
+
+
+@router.get("/{dataset_id}/preview")
+def preview_dataset(
+    dataset_id: int,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """预览数据集样本"""
+    result = normal_dataset_service.preview_dataset(db, dataset_id, page=page, size=size)
+    if result is None:
+        raise HTTPException(status_code=404, detail="数据集不存在")
+    return result
+
+
+@router.post("/preview", response_model=DatasetPreviewResponse)
+def preview_by_filter(
+    body: DatasetPreviewRequest,
+    db: Session = Depends(get_db),
+):
+    """按条件预览命中资源数（不创建数据集）"""
+    result = normal_dataset_service.preview_dataset_by_filter(
+        db,
+        resource_ids=body.resource_ids,
+        filters=body.filters,
+    )
+    return DatasetPreviewResponse(**result)
+
+
+@router.put("/{dataset_id}/visibility", response_model=DatasetResponse)
+def set_visibility(
+    dataset_id: int,
+    body: DatasetVisibilityRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """设置数据集可见性（private / public）"""
+    result = normal_dataset_service.set_dataset_visibility(db, dataset_id, body.visibility)
+    return DatasetResponse(**result)
+
+
+@router.get("/{dataset_id}/versions")
+def get_versions(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    """获取数据集版本列表"""
+    result = normal_dataset_service.get_dataset_versions(db, dataset_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="数据集不存在")
+    return result
+
+
+@router.get("/{dataset_id}/diff")
+def get_diff(
+    dataset_id: int,
+    v1: str = Query(..., description="基准版本"),
+    v2: str = Query(..., description="对比版本"),
+    db: Session = Depends(get_db),
+):
+    """数据集版本 diff"""
+    result = normal_dataset_service.get_dataset_diff(db, dataset_id, v1, v2)
+    if result is None:
+        raise HTTPException(status_code=404, detail="数据集不存在")
+    return result
+
+
+@router.get("/{dataset_id}/export")
+def export_dataset(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    """导出数据集为 ZIP 文件"""
+    from fastapi.responses import Response
+
+    zip_bytes, filename = normal_dataset_service.export_dataset(db, dataset_id)
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{dataset_id}/copy", response_model=DatasetResponse, status_code=201)
+def copy_dataset(
+    dataset_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """复制数据集到个人库"""
+    result = normal_dataset_service.copy_dataset(db, dataset_id, current_user.user_id)
     return DatasetResponse(**result)

@@ -71,3 +71,61 @@ class DatasetListResponse(BaseModel):
     total: int
     page: int = 1
     size: int = 20
+
+
+# ──── 预览 ────
+
+
+class DatasetPreviewRequest(BaseModel):
+    """按条件预览数据集命中数请求"""
+    resource_ids: list[int] | None = Field(default=None, description="数据资源 ID 列表")
+    filters: dict[str, Any] | None = Field(default=None, description="筛选条件")
+
+
+class DatasetPreviewResponse(BaseModel):
+    """数据集预览响应"""
+    match_count: int
+    sample_items: list[dict[str, Any]] = Field(
+        default_factory=list, description="预览样本列表（最多 20 条）"
+    )
+
+
+# ──── 可见性 ────
+
+
+class DatasetVisibilityRequest(BaseModel):
+    """设置数据集可见性请求"""
+    visibility: str = Field(..., description="可见性: private / public")
+
+    @classmethod
+    def validate_visibility(cls, v: str) -> str:
+        if v not in ("private", "public"):
+            raise ValueError("visibility 必须为 private 或 public")
+        return v
+
+
+# ──── 版本 diff ────
+
+
+class DatasetVersionItem(BaseModel):
+    """数据集版本条目"""
+    version: str
+    updated_at: datetime | str | None
+    sample_count: int = 0
+    note: str | None = None
+
+
+class DatasetVersionListResponse(BaseModel):
+    """数据集版本列表"""
+    dataset_id: int
+    versions: list[DatasetVersionItem]
+
+
+class DatasetDiffResponse(BaseModel):
+    """数据集版本 diff"""
+    dataset_id: int
+    v1: str
+    v2: str
+    added: list[dict[str, Any]] = Field(default_factory=list)
+    removed: list[dict[str, Any]] = Field(default_factory=list)
+    unchanged: int = 0

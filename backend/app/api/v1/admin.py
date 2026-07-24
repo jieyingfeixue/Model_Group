@@ -10,6 +10,9 @@ from app.schemas.admin import (
     AdminUserCreateRequest,
     AdminUserListResponse,
     AdminUserResponse,
+    EvalResultInvalidateRequest,
+    InferTaskPendingListResponse,
+    LeaderboardGovernanceResponse,
     RoleUpdateRequest,
     StatusUpdateRequest,
 )
@@ -146,3 +149,63 @@ def add_label_category(
     """管理员向标签体系新增类别"""
     result = admin_label_service.add_category(db, schema_id, body.category.model_dump())
     return CategoryResponse(**result)
+
+
+# ════════════════════════════════════════════════════════════
+#  §11 扩展：推理审批 / 天梯治理 / 作弊下架
+# ════════════════════════════════════════════════════════════
+
+# ──── GET /api/admin/infer-tasks/pending ────
+
+@router.get("/infer-tasks/pending", response_model=InferTaskPendingListResponse)
+def list_pending_infer_tasks(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """管理员查看待审批推理任务列表"""
+    items, total = admin_platform_service.list_pending_infer_tasks(
+        db, page=page, size=size
+    )
+    return InferTaskPendingListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+    )
+
+
+# ──── GET /api/admin/eval/leaderboard ────
+
+@router.get("/eval/leaderboard", response_model=LeaderboardGovernanceResponse)
+def list_eval_governance(
+    dataset_id: int | None = Query(None, description="按数据集筛选"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """管理员天梯治理：查看所有评测结果（含非公开）"""
+    items, total = admin_platform_service.list_leaderboard_governance(
+        db, dataset_id=dataset_id, page=page, size=size
+    )
+    return LeaderboardGovernanceResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+    )
+
+
+# ──── POST /api/admin/eval-results/{result_id}/invalidate ────
+
+@router.post("/eval-results/{result_id}/invalidate")
+def invalidate_eval_result(
+    result_id: int,
+    body: EvalResultInvalidateRequest,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """管理员作弊下架：将评测结果标记无效，从排行榜移除"""
+    return admin_platform_service.invalidate_eval_result(db, result_id, body.reason)

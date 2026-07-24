@@ -1,4 +1,4 @@
-"""标注 Service — 创建任务 / 保存标注 / 查询"""
+"""标注 Service — 创建任务 / 保存标注 / 查询 / 进度 / 历史"""
 
 from datetime import datetime
 from typing import Any
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.annotation import Annotation
 from app.models.annotation_task import AnnotationTask
+from app.models.data_resource import DataResource
 
 
 def create_annotation_task(
@@ -149,4 +150,185 @@ def save_annotation(
         "resource_id": annotation.resource_id,
         "version": annotation.version,
         "message": "保存成功",
+    }
+
+
+# ──── 任务进度 ────
+
+def get_task_progress(db: Session, task_id: int) -> dict[str, Any]:
+    """获取标注任务进度统计"""
+    task = db.query(AnnotationTask).filter(AnnotationTask.task_id == task_id).first()
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="标注任务不存在"
+        )
+
+    # 统计任务范围内的图片总数
+    data_range = task.data_range or {}
+    total_images = data_range.get("sample_count", 0)
+
+    # 统计已标注的唯一资源数
+    from sqlalchemy import func as sqlfunc
+
+    annotated_row = (
+        db.query(sqlfunc.count(sqlfunc.distinct(Annotation.resource_id)))
+        .filter(Annotation.task_id == task_id)
+        .first()
+    )
+    annotated = annotated_row[0] if annotated_row else 0
+
+    # 统计已审核数
+    reviewed = (
+        db.query(sqlfunc.count(sqlfunc.distinct(Annotation.resource_id)))
+        .filter(
+            Annotation.task_id == task_id,
+            Annotation.review_status.in_(["approved", "rejected"]),
+        )
+        .first()
+    )
+    reviewed_count = reviewed[0] if reviewed else 0
+
+    progress_pct = round(annotated / total_images * 100, 1) if total_images > 0 else 0.0
+
+    return {
+        "task_id": task_id,
+        "total_images": total_images,
+        "annotated": annotated,
+        "reviewed": reviewed_count,
+        "progress_pct": progress_pct,
+    }
+
+
+# ──── 下一个待标注图片 ────
+
+def get_next_image(
+    db: Session, task_id: int, user_id: int
+) -> dict[str, Any] | None:
+    """获取下一个待标注的图片"""
+    task = db.query(AnnotationTask).filter(AnnotationTask.task_id == task_id).first()
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="标注任务不存在"
+        )
+
+    if task.status not in ("draft", "in_progress"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="任务状态不允许标注",
+        )
+
+    data_range = task.data_range or {}
+    dataset_id = data_range.get("dataset_id")
+    resource_ids = data_range.get("resource_ids")
+
+    # 获取任务中已被标注的资源 ID
+    from app.models.annotation import Annotation as AnnModel
+
+    annotated_ids = {
+        row[0]
+        for row in db.query(AnnModel.resource_id)
+        .filter(AnnModel.task_id == task_id)
+        .distinct()
+        .all()
+    }
+
+    # 查找下一个未标注的资源
+    query = db.query(DataResource)
+    if resource_ids:
+        query = query.filter(DataResource.resource_id.in_(resource_ids))
+    elif dataset_id:
+        from app.models.dataset_item import DatasetItem
+
+        item_resource_ids = [
+            row[0]
+            for row in db.query(DatasetItem.resource_id)
+            .filter(DatasetItem.dataset_id == dataset_id)
+            .all()
+        ]
+        if item_resource_ids:
+            query = query.filter(DataResource.resource_id.in_(item_resource_ids))
+
+    next_resource = (
+        query.filter(~DataResource.resource_id.in_(annotated_ids))
+        .order_by(DataResource.resource_id)
+        .first()
+    )
+
+    if next_resource is None:
+        return None  # 全部标注完成
+
+    # 检查是否有已有标注草稿
+    existing = Annotation.get_latest(db, task_id, next_resource.resource_id)
+
+    return {
+        "resource_id": next_resource.resource_id,
+        "name": next_resource.name,
+        "modality": next_resource.modality,
+        "file_path": next_resource.file_path,
+        "has_existing_annotation": existing is not None,
+        "existing_annotation_id": existing.annotation_id if existing else None,
+        "existing_bboxes": existing.bboxes if existing else None,
+    }
+
+
+# ──── 提交标注 ────
+
+def submit_annotation(
+    db: Session, task_id: int, resource_id: int, user_id: int
+) -> dict[str, Any]:
+    """提交标注结果（标记完成状态）"""
+    task = db.query(AnnotationTask).filter(AnnotationTask.task_id == task_id).first()
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="标注任务不存在"
+        )
+
+    annotation = Annotation.get_latest(db, task_id, resource_id)
+    if annotation is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该图片尚未标注，请先保存标注结果",
+        )
+
+    # 更新 review_status 为 submitted（如果跳过审核则直接 approved）
+    new_status = "approved" if task.skip_review else "submitted"
+    annotation.review_status = new_status
+    annotation.save(db)
+
+    return {
+        "annotation_id": annotation.annotation_id,
+        "task_id": task_id,
+        "resource_id": resource_id,
+        "version": annotation.version,
+        "message": "提交成功",
+    }
+
+
+# ──── 标注历史 ────
+
+def get_annotation_history(
+    db: Session, task_id: int, resource_id: int
+) -> dict[str, Any]:
+    """获取某图片的标注历史（所有版本）"""
+    history = Annotation.get_history(db, task_id, resource_id)
+
+    current = Annotation.get_latest(db, task_id, resource_id)
+
+    return {
+        "resource_id": resource_id,
+        "task_id": task_id,
+        "history": [
+            {
+                "annotation_id": a.annotation_id,
+                "task_id": a.task_id,
+                "resource_id": a.resource_id,
+                "version": a.version,
+                "bboxes": a.bboxes,
+                "review_status": a.review_status,
+                "created_by": a.created_by,
+                "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+            }
+            for a in history
+        ],
+        "current_version": current.version if current else 1,
     }
