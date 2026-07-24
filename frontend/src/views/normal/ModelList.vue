@@ -67,36 +67,9 @@
         {{row.status}}
         </el-tag></template></el-table-column>
       <el-table-column label="操作" width="300" header-align="center" align="center"><template #default="{row}">
-        <el-button
-          plain
-          size="small"
-          >
-          详情
-          </el-button>
-
-          <el-button
-          type="success"
-          size="small"
-          plain
-          >
-          训练
-          </el-button>
-
-          <el-button
-          type="warning"
-          size="small"
-          plain
-          >
-          推理
-          </el-button>
-
-          <el-button
-          type="danger"
-          size="small"
-          plain
-          >
-          评测
-          </el-button>
+        <el-button plain size="small" @click="goDetail(row)">详情</el-button>
+          <el-button type="success" size="small" plain @click="$router.push('/train')">训练</el-button>
+          <el-button type="warning" size="small" plain @click="$router.push('/eval')">评测</el-button>
       </template></el-table-column>
     </el-table>
   </div>
@@ -107,7 +80,7 @@
       <el-form-item label="框架"><el-select v-model="uploadForm.framework"><el-option label="PyTorch" value="pytorch" /><el-option label="ONNX" value="onnx" /></el-select></el-form-item>
       <el-form-item label="骨干网络"><el-input v-model="uploadForm.backbone" placeholder="如 ResNet50" /></el-form-item>
       <el-form-item label="输入尺寸"><el-input v-model="uploadForm.inputSize" placeholder="640x640" /></el-form-item>
-      <el-form-item label="模型文件"><el-button @click="onMockUpload">选择文件（Mock）</el-button></el-form-item>
+      <el-form-item label="模型文件"><input type="file" @change="e => uploadFile = e.target.files[0]" /></el-form-item>
     </el-form>
     <template #footer><el-button @click="uploadVisible=false">取消</el-button><el-button type="primary" @click="onSubmit">确认上传</el-button></template>
   </el-dialog>
@@ -115,21 +88,63 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, onActivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { getMyModels, registerModel, getBaselines } from '@/api/model'
+
 const router = useRouter()
 const filter = ref('')
 const uploadVisible = ref(false)
 const uploadForm = reactive({ name:'', framework:'pytorch', backbone:'', inputSize:'640x640' })
-const models = ref([
-  { model_id:1, name:'YOLOv8-低光增强', framework:'pytorch', status:'available', created_at:'2024-05-10' },
-  { model_id:2, name:'Faster R-CNN ResNet-50', framework:'pytorch', status:'available', created_at:'2024-06-02' },
-  { model_id:3, name:'DETR-多模态', framework:'onnx', status:'available', created_at:'2024-06-20' },
-])
-function onMockUpload(){ ElMessage.info('Mock：文件已选择') }
-function onSubmit(){ uploadVisible.value = false; ElMessage.success('模型已上传（Mock）') }
-function onEval(row){ router.push('/eval?model='+row.model_id) }
+const uploadFile = ref(null)
+const models = ref([])
+
+async function fetchModels() {
+  try {
+    const params = {}
+    if (filter.value) params.framework = filter.value
+    const { data } = await getMyModels(params)
+    models.value = data.items || []
+  } catch {
+    ElMessage.error('加载模型列表失败')
+  }
+}
+
+function onFileSelected(e) {
+  // el-upload change event
+}
+
+async function onSubmit() {
+  if (!uploadForm.name) { ElMessage.warning('请输入模型名称'); return }
+  try {
+    const formData = new FormData()
+    formData.append('name', uploadForm.name)
+    formData.append('framework', uploadForm.framework)
+    formData.append('metadata', JSON.stringify({
+      backbone: uploadForm.backbone,
+      input_size: { w: 640, h: 640 }
+    }))
+    // 使用选择的文件或空文件占位（后端要求 file 必填）
+    if (uploadFile.value) {
+      formData.append('file', uploadFile.value)
+    } else {
+      const emptyBlob = new Blob([''], { type: 'application/octet-stream' })
+      formData.append('file', emptyBlob, 'placeholder.pt')
+    }
+    await registerModel(formData)
+    uploadVisible.value = false
+    ElMessage.success('模型已注册')
+    fetchModels()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '注册失败')
+  }
+}
+
+function goDetail(row) { router.push('/models/' + row.model_id) }
+onMounted(fetchModels)
+onActivated(fetchModels)
+watch(filter, fetchModels)
 </script>
 
 <style scoped>

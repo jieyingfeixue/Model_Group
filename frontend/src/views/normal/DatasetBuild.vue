@@ -96,9 +96,9 @@
         </div>
         <el-radio-group v-model="split.strategy">
             <el-radio value="random">随机划分</el-radio>
-            <span style="color:#94a3b8;font-size:12px;margin-left:4px;">（所有样本随机打乱后按比例切分）</span>
-            <el-radio value="stratified" style="margin-left:16px;">分层均衡</el-radio>
-            <span style="color:#94a3b8;font-size:12px;margin-left:4px;">（按场景分组，每组内按比例切分，保证各子集场景分布一致）</span>
+            <span style="color:#94a3b8;font-size:12px;margin-left:4px;">（所有图片随机打乱后按比例切分，适用于单模态数据集）</span>
+            <el-radio value="grouped" style="margin-left:16px;">按样本分组</el-radio>
+            <span style="color:#94a3b8;font-size:12px;margin-left:4px;">（同一时刻采集的多模态图片作为整体分配到同一子集，适用于多模态数据集）</span>
           </el-radio-group>
       </div>
       <div class="card" v-if="hitCount > 0">
@@ -110,11 +110,6 @@
     <el-input
       v-model="datasetName"
       placeholder="数据集名称"
-    />
-
-    <el-input
-      v-model="versionNote"
-      placeholder="版本说明"
     />
 
   </div>
@@ -130,21 +125,12 @@
     </el-button>
 
     <el-button
-      type="success"
-      size="large"
-      :disabled="!datasetId"
-      @click="onFreeze"
-    >
-      冻结版本
-    </el-button>
-
-    <el-button
       type="warning"
       size="large"
       :disabled="!datasetId"
-      @click="onPublish"
+      @click="onSubmitReview"
     >
-      发布数据集
+      提交公开申请
     </el-button>
 
   </div>
@@ -157,32 +143,7 @@
 
           <h3>✅ 数据集创建成功</h3>
 
-          <p>
-
-          数据集ID：
-
-          <strong>
-
-          {{ datasetId }}
-
-          </strong>
-
-          </p>
-
-          <p>
-
-          当前状态：
-
-          <el-tag
-          type="info"
-          round
-          >
-
-          {{ statusLabel }}
-
-          </el-tag>
-
-          </p>
+          <p>数据集ID：<strong>{{ datasetId }}</strong></p>
 
           </div>
     </el-tab-pane>
@@ -233,17 +194,36 @@
 export default { name: 'DatasetBuild' }
 </script>
 <script setup>
-import { ref, reactive, computed, onActivated } from 'vue'
-import { useRoute } from 'vue-router'
-import { sharedDatasets } from '@/mock/data'
+import { ref, reactive, onActivated } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getDataList } from '@/api/data'
+import { createDataset, submitForReview } from '@/api/dataset'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
+const router = useRouter()
+function resetAll() {
+  // 筛选条件
+  filters.modality = []; filters.scene = []; filters.timeRange = null
+  // 查询结果
+  hitCount.value = null; matchedSamples.value = []; selectedIds.value = new Set()
+  samplePage.value = 1; sampleCount.value = 20
+  // 数据集信息
+  datasetId.value = null
+  datasetName.value = ''
+  // 子集划分
+  split.train = 70; split.val = 20; split.test = 10; split.strategy = 'random'
+  // 本地上传
+  uploadFiles.value = []; uploadDone.value = false
+  datasetName2.value = ''
+  uploadOpts.withAnnotation = false; uploadOpts.format = 'coco'; uploadOpts.modality = 'visible'
+}
+
 onActivated(() => {
   if (route.query.fresh === '1') {
-    hitCount.value = null; matchedSamples.value = []; selectedIds.value = new Set()
-    datasetId.value = null; sampleCount.value = 20; samplePage.value = 1
+    resetAll()
+    // 清除 fresh 参数，避免从样本详情返回时再次重置
+    router.replace({ query: {} })
   }
 })
 const activeTab = ref('platform')
@@ -256,9 +236,7 @@ const filters = reactive({ modality:[], scene:[], timeRange:null })
 const split = reactive({ train:70, val:20, test:10, strategy:'random' })
 const hitCount = ref(null)
 const datasetName = ref('')
-const versionNote = ref('')
 const datasetId = ref(null)
-const statusText = ref('draft')
 const matchedSamples = ref([])
 const samplePage = ref(1)
 const samplePageSize = ref(12)
@@ -323,35 +301,40 @@ async function onSearch() {
     sampleCount.value = Math.min(20, all.length)
   } catch { /* backend not ready */ }
 }
-function onCreate(){
+async function onCreate(){
   if (selectedIds.value.size < 1) { ElMessage.warning('请至少选择1个样本'); return }
   const selected = matchedSamples.value.filter(s => selectedIds.value.has(s.sample_id))
-  const n = selected.length
-  datasetId.value = Date.now(); statusText.value='draft'
-  // 添加到共享数据集列表
-  sharedDatasets.push({
-    dataset_id: Date.now(),
-    name: datasetName.value || '新建数据集',
-    version: 'v1.0',
-    sample_count: n,
-    status: 'draft',
-    visibility: 'private',
-    created_at: new Date().toISOString().slice(0, 10),
-    samples: selected  // 保存选中的样本数据
-  })
-  ElMessage.success(`已从 ${matchedSamples.value.length} 个样本中随机选取 ${n} 个，数据集已创建（Mock）`)
+  // 从选中样本中收集所有 resource_id
+  const resourceIds = selected.flatMap(s => s.images.map(img => img.resource_id))
+  const n = resourceIds.length
+  try {
+    const { data } = await createDataset({
+      name: datasetName.value || '新建数据集',
+      description: '',
+      resource_ids: resourceIds,
+      split_config: {
+        train: split.train,
+        val: split.val,
+        test: split.test,
+        strategy: split.strategy
+      },
+      visibility: 'private'
+    })
+    datasetId.value = data.dataset_id
+    ElMessage.success(`已从 ${matchedSamples.value.length} 个样本中选取 ${selected.length} 个样本（${n} 个资源），数据集已创建，ID: ${data.dataset_id}`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '创建数据集失败')
+  }
 }
-function onFreeze(){ statusText.value='frozen'; ElMessage.success('已冻结') }
-function onPublish(){ statusText.value='published'; ElMessage.success('已发布') }
-
-const statusLabel = computed(()=>{
-    const map = {
-        draft:'草稿',
-        frozen:'已冻结',
-        published:'已发布'
-    }
-    return map[statusText.value]
-})
+async function onSubmitReview(){
+  if (!datasetId.value) return
+  try {
+    await submitForReview(datasetId.value)
+    ElMessage.success('已提交公开申请，等待审核员审批')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '提交失败')
+  }
+}
 
 // ---- 方式二：本地上传 ----
 const uploadFiles = ref([])

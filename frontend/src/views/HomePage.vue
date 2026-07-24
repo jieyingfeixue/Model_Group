@@ -239,14 +239,40 @@
 
 <script setup>
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getDatasetList } from '@/api/dataset'
+import { getDataList } from '@/api/data'
+import { getMyModels } from '@/api/model'
+
 const router = useRouter()
 const userStore = useUserStore()
 const datasets = ref([])
+
+async function fetchStats() {
+  try {
+    const [dataRes, modelRes] = await Promise.all([
+      getDataList({ page: 1, size: 1 }),
+      getMyModels()
+    ])
+    const totalResources = dataRes.data?.total || 0
+    stats.value = [
+      { num: totalResources.toLocaleString(), label: '数据资源' },
+      { num: (dataRes.data?.items || []).filter(i => i.annotation_status === 'annotated').length.toLocaleString() + '+', label: '标注样本' },
+      { num: (Array.isArray(modelRes.data) ? modelRes.data.length : (modelRes.data?.total || 0)).toString(), label: '评测模型' },
+    ]
+  } catch { /* ignore */ }
+
+  try {
+    const { data } = await getDatasetList({ visibility: 'public', page: 1, size: 4 })
+    datasets.value = data.items || []
+  } catch { /* ignore */ }
+}
+
+onMounted(fetchStats)
+onActivated(fetchStats)
 const cards = [
 {
  icon:'📦',
@@ -284,11 +310,11 @@ const cards = [
  needLogin:true
 }
 ]
-const stats = [
-  { num: '128', label: '公开数据集' },
-  { num: '2,400+', label: '标注样本' },
-  { num: '36', label: '评测模型' },
-]
+const stats = ref([
+  { num: '~', label: '数据资源' },
+  { num: '~', label: '标注样本' },
+  { num: '~', label: '评测模型' },
+])
 const roleLabel = computed(() => {
   const map = { normal: '普通用户', reviewer: '审核员', admin: '管理员' }
   return map[userStore.role] || ''
@@ -301,12 +327,6 @@ function modalityLabel(m) {
   const map = { visible: '可见光', infrared: '红外', mmwave: '毫米波', lidar: '激光雷达' }
   return map[m] || m
 }
-onMounted(async () => {
-  try {
-    const { data } = await getDatasetList({ visibility: 'public', page: 1, size: 4 })
-    datasets.value = data.items || []
-  } catch { /* ignore */ }
-})
 </script>
 
 <style scoped>

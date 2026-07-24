@@ -35,8 +35,8 @@
     <div class="content-card">
         <div class="card"><h3>🚀 发起评测任务</h3>
         <el-form label-position="top" class="eval-form">
-        <el-form-item label="模型"><el-select v-model="evalForm.model" style="width:100%"><el-option v-for="m in models" :key="m.id" :label="m.name" :value="m.id"/></el-select></el-form-item>
-        <el-form-item label="测试数据集"><el-select v-model="evalForm.dataset" style="width:100%"><el-option label="低空障碍物检测 v1.0" :value="1"/></el-select></el-form-item>
+        <el-form-item label="模型"><el-select v-model="evalForm.model" style="width:100%"><el-option v-for="m in models" :key="m.model_id" :label="m.name" :value="m.model_id"/></el-select></el-form-item>
+        <el-form-item label="测试数据集"><el-select v-model="evalForm.dataset" style="width:100%"><el-option v-for="d in datasets" :key="d.dataset_id" :label="d.name" :value="d.dataset_id"/></el-select></el-form-item>
         <el-form-item label="置信度阈值"> <el-slider v-model="evalForm.conf"
             :min="0"
             :max="1"
@@ -99,54 +99,83 @@
 </template>
 
 <script setup>
-import {ref,reactive} from 'vue';
+import {ref,reactive,onMounted} from 'vue'
+import {useRouter} from 'vue-router'
 import {ElMessage} from 'element-plus'
-const models=[{id:1,name:'YOLOv8-低光增强'},{id:2,name:'Faster R-CNN ResNet-50'}]
+import { getMyModels } from '@/api/model'
+import { getDatasetList } from '@/api/dataset'
+import { submitEval, getEvalStatus } from '@/api/eval'
+
+const router = useRouter()
+const models = ref([])
+const datasets = ref([])
 const evalForm = reactive({
-    model:1,
-    dataset:1,
-    iou:0.5,
-    conf:0.25,
-    metrics:['mAP','Precision','Recall']
+    model: null,
+    dataset: null,
+    iou: 0.5,
+    conf: 0.25,
+    metrics: ['mAP','Precision','Recall']
 })
 const running=ref(false);const completed=ref(false);const status=ref('')
 const progress = ref(0)
-function onSubmit(){
+const evalTaskId = ref(null)
+let pollTimer = null
 
-running.value=true
+onMounted(async () => {
+  try {
+    const [mRes, dRes] = await Promise.all([
+      getMyModels(),
+      getDatasetList({ visibility: 'public' })
+    ])
+    models.value = mRes.data?.items || []
+    datasets.value = dRes.data?.items || []
+    evalForm.model = models.value[0]?.model_id || null
+    evalForm.dataset = datasets.value[0]?.dataset_id || null
+  } catch { /* ignore */ }
+})
 
-status.value='排队中'
-
-progress.value=10
-
-setTimeout(()=>{
-
-status.value='评测中'
-
-progress.value=50
-
-},1000)
-
-setTimeout(()=>{
-
-status.value='生成报告'
-
-progress.value=90
-
-},2500)
-
-setTimeout(()=>{
-
-status.value='完成'
-
-progress.value=100
-
-running.value=false
-
-completed.value=true
-
-},3500)
-
+async function onSubmit(){
+  if (!evalForm.model || !evalForm.dataset) { ElMessage.warning('请选择模型和数据集'); return }
+  running.value = true
+  progress.value = 10
+  status.value = '排队中'
+  try {
+    const { data } = await submitEval({
+      model_id: evalForm.model,
+      dataset_id: evalForm.dataset,
+      metric_config: {
+        iou_thresholds: [evalForm.iou],
+        conf_threshold: evalForm.conf,
+        metrics: evalForm.metrics
+      }
+    })
+    evalTaskId.value = data.task_id
+    status.value = '评测中'
+    progress.value = 30
+    // 轮询评测状态
+    pollTimer = setInterval(async () => {
+      try {
+        const { data: t } = await getEvalStatus(evalTaskId.value)
+        status.value = t.status
+        if (t.status === 'running') progress.value = Math.min(progress.value + 10, 90)
+        else if (t.status === 'completed') {
+          progress.value = 100
+          running.value = false
+          completed.value = true
+          clearInterval(pollTimer)
+          ElMessage.success('评测完成')
+          router.push('/eval/' + evalTaskId.value)
+        } else if (t.status === 'failed') {
+          running.value = false
+          clearInterval(pollTimer)
+          ElMessage.error('评测失败')
+        }
+      } catch { /* ignore */ }
+    }, 2000)
+  } catch (e) {
+    running.value = false
+    ElMessage.error(e?.response?.data?.detail || '提交评测失败')
+  }
 }
 
 </script>

@@ -16,11 +16,11 @@
           <span>公开数据集</span>
       </div>
       <div class="stat">
-          <h2>4</h2>
+          <h2>{{ modalityCount }}</h2>
           <span>数据模态</span>
       </div>
       <div class="stat">
-          <h2>100%</h2>
+          <h2>{{ datasets.length > 0 ? '✓' : '-' }}</h2>
           <span>开放共享</span>
       </div>
     </div>
@@ -115,6 +115,7 @@ const router = useRouter()
 const datasets = ref([])
 const previewVisible = ref(false)
 const previewDataset = ref(null)
+const modalityCount = ref(0)
 
 const marketFilter = reactive({ type: 'all', keyword: '', modality: '' })
 
@@ -131,9 +132,14 @@ async function fetchDatasets() {
   try {
     const { data } = await getDatasetList(params)
     let items = data.items || data.datasets || []
+    // 过滤掉已归档/删除的数据集
+    items = items.filter(d => d.archive_status !== 'archived' && d.status !== 'archived')
     if (marketFilter.type === 'official') items = items.filter(d => d.is_official)
     if (marketFilter.type === 'community') items = items.filter(d => !d.is_official)
     datasets.value = items
+    // 统计模态种类
+    const mods = new Set(items.map(d => d.modality).filter(Boolean))
+    modalityCount.value = mods.size || 4
   } catch { datasets.value = [] }
 }
 

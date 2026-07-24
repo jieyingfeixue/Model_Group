@@ -19,14 +19,14 @@
           <div class="info-item">
             <span class="label">分辨率</span>
             <span class="value">
-              {{ item.metadata?.width }} × {{ item.metadata?.height }}
+              {{ item.meta_info?.width }} × {{ item.meta_info?.height }}
             </span>
           </div>
 
           <div class="info-item">
             <span class="label">文件大小</span>
             <span class="value">
-              {{ item.metadata?.file_size || '-' }}
+              {{ item.meta_info?.file_size || '-' }}
             </span>
           </div>
 
@@ -40,35 +40,35 @@
           <div class="info-item">
             <span class="label">来源</span>
             <span class="value">
-              {{ item.metadata?.source || item.metadata?.device || '-' }}
+              {{ item.meta_info?.source || item.meta_info?.device || '-' }}
             </span>
           </div>
 
           <div class="info-item">
             <span class="label">场景</span>
             <span class="value">
-              {{ item.metadata?.scene || '-' }}
+              {{ item.meta_info?.scene || '-' }}
             </span>
           </div>
 
           <div class="info-item">
             <span class="label">天气</span>
             <span class="value">
-              {{ item.metadata?.weather || '-' }}
+              {{ item.meta_info?.weather || '-' }}
             </span>
           </div>
 
           <div class="info-item">
             <span class="label">采集批次</span>
             <span class="value">
-              {{ item.metadata?.batch_id || '-' }}
+              {{ item.meta_info?.batch_id || '-' }}
             </span>
           </div>
 
           <div class="info-item">
             <span class="label">地理位置</span>
             <span class="value">
-              {{ item.metadata?.geo_location || '-' }}
+              {{ item.meta_info?.geo_location || '-' }}
             </span>
           </div>
 
@@ -143,7 +143,7 @@
 import { ref } from 'vue'
 
 const props = defineProps({
-  item: { type: Object, default: () => ({ metadata: {} }) },
+  item: { type: Object, default: () => ({ meta_info: {} }) },
   versions: { type: Array, default: () => [] },
   categoryLabels: { type: Array, default: () => [] },
 })
