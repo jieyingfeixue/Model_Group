@@ -19,7 +19,11 @@
           <div class="info-item">
             <span class="label">分辨率</span>
             <span class="value">
-              {{ item.meta_info?.width }} × {{ item.meta_info?.height }}
+              {{
+                item.modality === 'lidar'
+                  ? 'BEV 俯视图（点云）'
+                  : `${item.meta_info?.width || 0} × ${item.meta_info?.height || 0}`
+              }}
             </span>
           </div>
 
@@ -27,13 +31,6 @@
             <span class="label">文件大小</span>
             <span class="value">
               {{ item.meta_info?.file_size || '-' }}
-            </span>
-          </div>
-
-          <div class="info-item">
-            <span class="label">上传时间</span>
-            <span class="value">
-              {{ formatDate(item.created_at) }}
             </span>
           </div>
 
@@ -52,23 +49,9 @@
           </div>
 
           <div class="info-item">
-            <span class="label">天气</span>
-            <span class="value">
-              {{ item.meta_info?.weather || '-' }}
-            </span>
-          </div>
-
-          <div class="info-item">
             <span class="label">采集批次</span>
             <span class="value">
               {{ item.meta_info?.batch_id || '-' }}
-            </span>
-          </div>
-
-          <div class="info-item">
-            <span class="label">地理位置</span>
-            <span class="value">
-              {{ item.meta_info?.geo_location || '-' }}
             </span>
           </div>
 

@@ -51,11 +51,13 @@ class DatasetResponse(BaseModel):
     filters: dict[str, Any] | None = None
     split_config: dict[str, Any] | None = None
     version: str = "v1.0"
-    status: str = "draft"
+    status: str = "frozen"
     archive_status: str = "active"
     visibility: str = "private"
     review_status: str = "not_submitted"
     sample_count: int = 0
+    annotated_count: int = 0
+    image_count: int = 0
     subset_counts: dict[str, int] = Field(
         default_factory=lambda: {"train": 0, "val": 0, "test": 0}
     )

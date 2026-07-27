@@ -90,8 +90,8 @@ function onFilterChange(val) {
   currentPage.value = 1
   fetchSamples()
 }
+
 async function fetchAllResources(filterParams) {
-  // 后端单次最多 6000 条资源；样本=多资源分组，必须翻页拉全
   const pageSizeApi = 6000
   let page = 1
   let items = []
@@ -112,51 +112,49 @@ async function fetchAllResources(filterParams) {
   return items
 }
 
-/** 各会话导入时 sample_group 都从 1 起编，必须带 batch_id 才能唯一 */
 function sampleKey(meta) {
-  const batch = meta?.batch_id || 'unknown'
-  const sg = meta?.sample_group
-  return `${batch}::${sg}`
+  return `${meta?.batch_id || 'unknown'}::${meta?.sample_group}`
 }
 
 function buildSampleGroups(rawItems) {
-  const items = rawItems.filter(item => item.meta_info?.sample_group != null)
   const groupMap = {}
-  items.forEach(item => {
-    const meta = item.meta_info || {}
-    const gid = sampleKey(meta)
-    if (!groupMap[gid]) {
-      groupMap[gid] = {
-        sample_id: gid,
-        group_no: meta.sample_group,
-        images: [],
-        scene: meta.scene || '-',
-        weather: meta.weather,
-        time_of_day: meta.time_of_day,
-        terrain: meta.terrain,
-        obstacle: meta.obstacle,
-        batch_id: meta.batch_id || '',
-        modality_count: 0,
-        _seenResource: new Set(),
-        _seenSensor: new Set(),
+  rawItems
+    .filter(item => item.meta_info?.sample_group != null)
+    .forEach(item => {
+      const meta = item.meta_info || {}
+      const gid = sampleKey(meta)
+      if (!groupMap[gid]) {
+        groupMap[gid] = {
+          sample_id: gid,
+          group_no: meta.sample_group,
+          images: [],
+          scene: meta.scene || '-',
+          weather: meta.weather,
+          time_of_day: meta.time_of_day,
+          terrain: meta.terrain,
+          obstacle: meta.obstacle,
+          batch_id: meta.batch_id || '',
+          modality_count: 0,
+          _seenResource: new Set(),
+          _seenSensor: new Set(),
+        }
       }
-    }
-    const g = groupMap[gid]
-    // 同会话重复导入 / 同 sensor 多条时去重，避免一张样本冒出 8 张图
-    if (g._seenResource.has(item.resource_id)) return
-    const sensorKey = meta.sensor || `${item.modality}:${item.name}`
-    if (g._seenSensor.has(sensorKey)) return
-    g._seenResource.add(item.resource_id)
-    g._seenSensor.add(sensorKey)
-    g.images.push({
-      resource_id: item.resource_id,
-      modality: item.modality,
-      name: item.name,
-      thumbnail: `/api/images/${item.resource_id}/thumbnail`,
-      annotation_status: item.annotation_status,
+      const g = groupMap[gid]
+      if (g._seenResource.has(item.resource_id)) return
+      const sensorKey = meta.sensor || `${item.modality}:${item.name}`
+      if (g._seenSensor.has(sensorKey)) return
+      g._seenResource.add(item.resource_id)
+      g._seenSensor.add(sensorKey)
+      g.images.push({
+        resource_id: item.resource_id,
+        modality: item.modality,
+        name: item.name,
+        sensor: meta.sensor || '',
+        thumbnail: `/api/images/${item.resource_id}/thumbnail`,
+        annotation_status: item.annotation_status,
+      })
+      g.modality_count = new Set(g.images.map(i => i.modality)).size
     })
-    g.modality_count = g.images.length
-  })
   return Object.values(groupMap).map(({ _seenResource, _seenSensor, ...rest }) => rest)
 }
 
@@ -165,7 +163,7 @@ async function fetchSamples() {
     const f = filters.value || {}
     const rawItems = await fetchAllResources({
       weather: f.weather || undefined,
-      time_of_day: f.timeOfDay || undefined,
+      time_of_day: f.time_of_day || undefined,
       terrain: f.terrain || undefined,
       obstacle: f.obstacle || undefined,
     })
@@ -176,7 +174,12 @@ async function fetchSamples() {
   } catch { /* backend not ready */ }
 }
 function onSelect(sample) {
-  router.push({ name: 'SampleDetail', params: { id: sample.sample_id } })
+  // 避免把 batch_id 放进 path（含特殊字符时路由会解析错，导致总进同一个样本）
+  router.push({
+    name: 'SampleDetail',
+    params: { id: String(sample.group_no ?? sample.sample_id) },
+    query: { batch: sample.batch_id || undefined },
+  })
 }
 function onPageChange(page) { currentPage.value = page; fetchSamples(); window.scrollTo(0, 0) }
 onMounted(fetchSamples)

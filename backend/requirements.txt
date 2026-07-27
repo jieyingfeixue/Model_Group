@@ -18,6 +18,7 @@ celery[redis]==5.4.0
 # 模型侧 Phase2/3：训练执行 / ONNX 推理 / 评测
 docker==7.1.0
 numpy==1.26.4
+scipy==1.13.1
 onnxruntime==1.19.2
 pycocotools==2.0.7
 # 可选：.pt → ONNX

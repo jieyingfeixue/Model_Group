@@ -11,10 +11,44 @@ from app.models.dataset_item import DatasetItem
 from app.models.data_resource import DataResource
 
 
+def _sample_group_key(meta: dict[str, Any] | None, resource_id: int) -> str:
+    """与前端一致：batch_id::sample_group，避免跨会话撞号。"""
+    meta = meta or {}
+    sg = meta.get("sample_group")
+    if sg is None:
+        return f"resource::{resource_id}"
+    batch = meta.get("batch_id") or "unknown"
+    return f"{batch}::{sg}"
+
+
+def _dataset_sample_stats(db: Session, dataset_id: int) -> tuple[int, int]:
+    """按样本组统计：返回 (样本数, 已标注样本数)。
+
+    已标注：该样本组内至少有一张图 annotation_status == annotated。
+    """
+    rows = (
+        db.query(DataResource.resource_id, DataResource.annotation_status, DataResource.meta_info)
+        .join(DatasetItem, DatasetItem.resource_id == DataResource.resource_id)
+        .filter(DatasetItem.dataset_id == dataset_id)
+        .all()
+    )
+    groups: dict[str, bool] = {}
+    for rid, anno_status, meta in rows:
+        key = _sample_group_key(meta if isinstance(meta, dict) else None, rid)
+        annotated = str(anno_status or "") == "annotated"
+        if key not in groups:
+            groups[key] = annotated
+        else:
+            groups[key] = groups[key] or annotated
+    sample_count = len(groups)
+    annotated_count = sum(1 for v in groups.values() if v)
+    return sample_count, annotated_count
+
+
 def _build_response(db: Session, dataset: Dataset) -> dict[str, Any]:
     """将 ORM 对象转为包含统计信息的响应字典"""
     counts = DatasetItem.count_by_subset(db, dataset.dataset_id)
-    total_items = sum(counts.values())
+    sample_count, annotated_count = _dataset_sample_stats(db, dataset.dataset_id)
     return {
         "dataset_id": dataset.dataset_id,
         "name": dataset.name,
@@ -27,7 +61,9 @@ def _build_response(db: Session, dataset: Dataset) -> dict[str, Any]:
         "archive_status": dataset.archive_status,
         "visibility": dataset.visibility,
         "review_status": dataset.review_status,
-        "sample_count": total_items,
+        "sample_count": sample_count,
+        "annotated_count": annotated_count,
+        "image_count": sum(counts.values()),
         "subset_counts": counts,
         "created_at": dataset.created_at.isoformat() if dataset.created_at else None,
         "updated_at": dataset.updated_at.isoformat() if dataset.updated_at else None,
@@ -65,7 +101,7 @@ def create_dataset(
             detail=f"以下资源不存在: {missing[:10]}{'...' if len(missing) > 10 else ''}",
         )
 
-    # 创建数据集
+    # 创建数据集（创建即冻结，可直接提交公开申请，不再经过 draft）
     dataset = Dataset.create(
         db,
         name=name,
@@ -74,6 +110,7 @@ def create_dataset(
         filters={"resource_ids": resource_ids},
         split_config=split_config,
         visibility=visibility,
+        status="frozen",
     )
 
     # 切分并写入 dataset_items
@@ -292,12 +329,15 @@ def split_dataset(
 # ──── 冻结 ────
 
 def freeze_dataset(db: Session, dataset_id: int) -> dict[str, Any]:
-    """冻结数据集（draft → frozen）"""
-    dataset = Dataset.update_status(db, dataset_id, "frozen")
+    """兼容旧接口：创建后已是 frozen；若仍为 draft 则升为 frozen。"""
+    dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if dataset is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="数据集不存在"
         )
+    if dataset.status == "draft":
+        dataset.status = "frozen"
+        dataset.save(db)
     return _build_response(db, dataset)
 
 
@@ -351,16 +391,21 @@ def restore_dataset(db: Session, dataset_id: int) -> dict[str, Any]:
 # ──── 提交审核 ────
 
 def submit_for_review(db: Session, dataset_id: int) -> dict[str, Any]:
-    """提交数据集审核（review_status → pending_review）"""
+    """提交数据集审核（review_status → pending_review）。
+
+    创建后即为 frozen；若仍有历史 draft，提交时自动升为 frozen。
+    """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if dataset is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="数据集不存在"
         )
-    if dataset.status != "frozen":
+    if dataset.status == "draft":
+        dataset.status = "frozen"
+    if dataset.status not in ("frozen", "published"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只有已冻结的数据集才能提交审核",
+            detail="当前状态无法提交公开申请",
         )
     dataset.review_status = "pending_review"
     dataset.save(db)
@@ -623,7 +668,7 @@ def copy_dataset(
         filters=dict(source.filters) if source.filters else {},
         split_config=dict(source.split_config) if source.split_config else {},
         visibility="private",
-        status="draft",
+        status="frozen",
     )
 
     # 复制条目
@@ -680,26 +725,31 @@ def get_dataset_samples(db: Session, dataset_id: int) -> list[dict[str, Any]]:
         .all()
     )
 
-    # 按 sample_group 分组
+    # 按 batch_id::sample_group 分组（与数据浏览一致）
     groups: dict[str, dict[str, Any]] = {}
     for rid, subset, name, modality, file_path, anno_status, meta in rows:
-        sg = str(meta.get("sample_group", rid)) if meta else str(rid)
-        if sg not in groups:
-            groups[sg] = {
-                "sample_group": sg,
-                "scene": (meta or {}).get("scene", "-"),
-                "weather": (meta or {}).get("weather"),
-                "time_of_day": (meta or {}).get("time_of_day"),
-                "terrain": (meta or {}).get("terrain"),
-                "obstacle": (meta or {}).get("obstacle"),
+        meta = meta if isinstance(meta, dict) else {}
+        sg_key = _sample_group_key(meta, rid)
+        if sg_key not in groups:
+            groups[sg_key] = {
+                "sample_id": sg_key,
+                "sample_group": meta.get("sample_group"),
+                "batch_id": meta.get("batch_id") or "",
+                "scene": meta.get("scene", "-"),
+                "weather": meta.get("weather"),
+                "time_of_day": meta.get("time_of_day"),
+                "terrain": meta.get("terrain"),
+                "obstacle": meta.get("obstacle"),
                 "subset": subset,
                 "resources": [],
             }
-        groups[sg]["resources"].append({
+        groups[sg_key]["resources"].append({
             "resource_id": rid,
             "modality": modality,
             "name": name,
+            "sensor": meta.get("sensor") or "",
             "annotation_status": anno_status,
+            "file_path": file_path,
         })
 
     return list(groups.values())

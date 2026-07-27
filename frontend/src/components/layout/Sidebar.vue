@@ -21,10 +21,10 @@
   >
       <div class="user-card">
           <div class="avatar">
-              {{ userStore.user?.username?.charAt(0).toUpperCase() }}
+              {{ userStore.user?.username?.charAt(0)?.toUpperCase() || '?' }}
           </div>
           <div class="user-name">
-              {{ userStore.user?.username }}
+              {{ userStore.user?.username || '用户' }}
           </div>
           <div class="user-role">{{ roleLabel }}</div>
           <el-button

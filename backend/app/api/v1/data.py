@@ -22,6 +22,18 @@ from app.services import normal_data_service
 router = APIRouter(tags=["Data"])
 
 
+def _parse_storage_path(file_path: str) -> tuple[str, str]:
+    """解析 MinIO 路径：支持 /bucket/key 与 s3://bucket/key。"""
+    path = (file_path or "").strip()
+    if path.startswith("s3://"):
+        path = path[5:]
+    path = path.lstrip("/")
+    parts = path.split("/", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"invalid storage path: {file_path}")
+    return parts[0], parts[1]
+
+
 @router.post("/data/upload", response_model=list[DataResourceResponse], status_code=201)
 async def upload_data(
     files: list[UploadFile] = File(..., description="图片文件，支持多文件上传"),
@@ -115,11 +127,13 @@ def list_data(
 
 @router.get("/images/{resource_id}")
 def get_image(resource_id: int, db: Session = Depends(get_db)):
-    """根据 resource_id 返回图片二进制"""
+    """返回图片；激光雷达 PCD→BEV，毫米波 MAT→距离-方位热力图。"""
     from io import BytesIO
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import Response, StreamingResponse
     from minio import Minio
     from app.core.config import settings as s
+    from app.utils.pcd_bev import pcd_bytes_to_bev_png
+    from app.utils.mmwave_render import mat_bytes_to_mmwave_png
 
     resource = db.get(DataResource, resource_id)
     if not resource:
@@ -128,22 +142,54 @@ def get_image(resource_id: int, db: Session = Depends(get_db)):
     client = Minio(endpoint=s.MINIO_ENDPOINT, access_key=s.MINIO_ACCESS_KEY,
                    secret_key=s.MINIO_SECRET_KEY, secure=s.MINIO_SECURE)
     try:
-        path = resource.file_path.lstrip("/")
-        parts = path.split("/", 1)
-        data = client.get_object(parts[0], parts[1])
-        return StreamingResponse(data.stream(), media_type="image/jpeg")
+        bucket, key = _parse_storage_path(resource.file_path)
+        obj = client.get_object(bucket, key)
+        raw = obj.read()
+        obj.close()
+        obj.release_conn()
     except Exception:
         raise HTTPException(status_code=404, detail="Image not found")
+
+    meta = resource.meta_info or {}
+    is_pcd = (
+        resource.modality == "lidar"
+        or resource.file_path.lower().endswith(".pcd")
+        or str(meta.get("sensor", "")).endswith("points")
+    )
+    if is_pcd:
+        try:
+            png = pcd_bytes_to_bev_png(raw)
+            return Response(content=png, media_type="image/png")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"PCD BEV render failed: {exc}")
+
+    is_mmwave = (
+        resource.modality == "mmwave"
+        or resource.file_path.lower().endswith(".mat")
+        or "mmwave" in str(meta.get("sensor", "")).lower()
+    )
+    if is_mmwave:
+        try:
+            frame_idx = int(meta.get("mmwave_frame_index", 0))
+            png = mat_bytes_to_mmwave_png(raw, frame_index=frame_idx)
+            return Response(content=png, media_type="image/png")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"mmwave render failed: {exc}")
+
+    media = "image/png" if resource.file_path.lower().endswith(".png") else "image/jpeg"
+    return StreamingResponse(BytesIO(raw), media_type=media)
 
 
 @router.get("/images/{resource_id}/thumbnail")
 def get_thumbnail(resource_id: int, size: int = 240, db: Session = Depends(get_db)):
-    """根据 resource_id 返回缩略图"""
+    """缩略图；激光雷达 / 毫米波同样走渲染结果。"""
     from io import BytesIO
     from fastapi.responses import StreamingResponse
     from minio import Minio
     from PIL import Image as PILImage
     from app.core.config import settings as s
+    from app.utils.pcd_bev import pcd_bytes_to_bev_png
+    from app.utils.mmwave_render import mat_bytes_to_mmwave_png
 
     resource = db.get(DataResource, resource_id)
     if not resource:
@@ -152,10 +198,36 @@ def get_thumbnail(resource_id: int, size: int = 240, db: Session = Depends(get_d
     client = Minio(endpoint=s.MINIO_ENDPOINT, access_key=s.MINIO_ACCESS_KEY,
                    secret_key=s.MINIO_SECRET_KEY, secure=s.MINIO_SECURE)
     try:
-        path = resource.file_path.lstrip("/")
-        parts = path.split("/", 1)
-        data = client.get_object(parts[0], parts[1])
-        img = PILImage.open(BytesIO(data.read()))
+        bucket, key = _parse_storage_path(resource.file_path)
+        obj = client.get_object(bucket, key)
+        raw = obj.read()
+        obj.close()
+        obj.release_conn()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    meta = resource.meta_info or {}
+    is_pcd = (
+        resource.modality == "lidar"
+        or resource.file_path.lower().endswith(".pcd")
+        or str(meta.get("sensor", "")).endswith("points")
+    )
+    is_mmwave = (
+        resource.modality == "mmwave"
+        or resource.file_path.lower().endswith(".mat")
+        or "mmwave" in str(meta.get("sensor", "")).lower()
+    )
+    try:
+        if is_pcd:
+            png = pcd_bytes_to_bev_png(raw, image_size=max(size, 256))
+            img = PILImage.open(BytesIO(png))
+        elif is_mmwave:
+            frame_idx = int(meta.get("mmwave_frame_index", 0))
+            side = max(size, 256)
+            png = mat_bytes_to_mmwave_png(raw, frame_index=frame_idx, image_size=(side, side))
+            img = PILImage.open(BytesIO(png))
+        else:
+            img = PILImage.open(BytesIO(raw))
         img.thumbnail((size, size))
         buf = BytesIO()
         img.save(buf, format="JPEG", quality=85)

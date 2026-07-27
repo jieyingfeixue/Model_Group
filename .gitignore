@@ -1,1 +1,23 @@
-node_modules/\ndist/
+node_modules/
+dist/
+frontend/dist/
+frontend/node_modules/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# 本地采集原始数据，勿入库
+with_cameras_capture_*/
+
+# 临时探测/调试产物
+scripts/_probe_*.py
+scripts/_bev_*/
+scripts/_bev_*.png
+scripts/_check_*.py
+scripts/_fix_*.py
+scripts/_list_*.py
+scripts/_upgrade_*.py

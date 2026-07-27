@@ -37,33 +37,33 @@
     <el-tab-pane label="从平台数据构建" name="platform">
       <div class="card"><h3>筛选条件</h3>
         <div class="filter-row">
+          <el-select v-model="filters.modality" placeholder="模态类型" multiple clearable>
+            <el-option v-for="m in modalities" :key="m" :label="modLabel(m)" :value="m" />
+          </el-select>
           <el-select v-model="filters.weather" placeholder="天气" clearable>
+            <el-option label="全部" value="" />
             <el-option label="晴天" value="sunny" />
-            <el-option label="多云" value="cloudy" />
             <el-option label="雨天" value="rainy" />
             <el-option label="雾天" value="foggy" />
           </el-select>
-          <el-select v-model="filters.timeOfDay" placeholder="时段" clearable>
+          <el-select v-model="filters.time_of_day" placeholder="时段" clearable>
+            <el-option label="全部" value="" />
             <el-option label="白天" value="day" />
             <el-option label="夜晚" value="night" />
           </el-select>
           <el-select v-model="filters.terrain" placeholder="地形" clearable>
-            <el-option label="平原" value="plain" />
+            <el-option label="全部" value="" />
             <el-option label="山地" value="mountain" />
+            <el-option label="平原" value="plain" />
             <el-option label="河流" value="river" />
-            <el-option label="城市" value="urban" />
-            <el-option label="高速" value="highway" />
-            <el-option label="乡村" value="rural" />
           </el-select>
           <el-select v-model="filters.obstacle" placeholder="障碍物" clearable>
-            <el-option label="高压/电线杆" value="pole" />
+            <el-option label="全部" value="" />
+            <el-option label="高压线塔" value="power_tower" />
+            <el-option label="风力发电车" value="wind_turbine" />
             <el-option label="建筑物" value="building" />
-            <el-option label="风力" value="wind" />
-            <el-option label="桥梁" value="bridge" />
-            <el-option label="树木" value="tree" />
-            <el-option label="路灯" value="lamp" />
           </el-select>
-          <el-button type="primary" size="large" icon="Search" @click="onSearch"> 查询 </el-button>
+          <el-button type="primary" size="large" @click="onSearch">查询</el-button>
         </div>
         <div class="hit-info" v-if="hitCount!==null">
 
@@ -89,14 +89,15 @@
           <div class="sample-grid">
             <div v-for="s in matchedSamples.slice((samplePage-1)*samplePageSize, samplePage*samplePageSize)" :key="s.sample_id"
               class="sample-item" :class="{ selected: selectedIds.has(s.sample_id) }"
-              @click="toggleSelect(s.sample_id)" @dblclick="$router.push({name:'SampleDetail', params:{id:s.sample_id}})">
+              @click="toggleSelect(s.sample_id)"
+              @dblclick="$router.push({ name:'SampleDetail', params:{ id: String(s.group_no ?? s.sample_id) }, query:{ batch: s.batch_id || undefined } })">
               <div class="thumb-row">
                 <div v-for="img in s.images.slice(0,4)" :key="img.resource_id" class="mini-thumb" :class="img.modality">
                   <img :src="img.thumbnail" @error="e=>e.target.style.display='none'" />
                 </div>
               </div>
               <div class="sample-meta">
-                <span>#{{ s.sample_id }}</span>
+                <span>#{{ s.group_no ?? s.sample_id }}</span>
                 <span>{{ s.scene }}</span>
                 <span>{{ s.modality_count }}模态</span>
               </div>
@@ -162,7 +163,7 @@
 
           <h3>✅ 数据集创建成功</h3>
 
-          <p>数据集ID：<strong>{{ datasetId }}</strong></p>
+          <p>数据集ID：<strong>{{ datasetId }}</strong>（已就绪，可直接提交公开申请）</p>
 
           </div>
     </el-tab-pane>
@@ -200,8 +201,7 @@
       </div>
       <div class="card" v-if="uploadDone">
         <p>数据集已创建，ID: {{ datasetId }}，状态: {{ statusText }}</p>
-        <el-button type="success" :disabled="!datasetId" @click="onFreeze">冻结</el-button>
-        <el-button type="warning" :disabled="!datasetId" @click="onPublish">发布</el-button>
+        <el-button type="warning" :disabled="!datasetId" @click="onSubmitReview">提交公开申请</el-button>
       </div>
     </el-tab-pane>
   </el-tabs>
@@ -213,7 +213,7 @@
 export default { name: 'DatasetBuild' }
 </script>
 <script setup>
-import { ref, reactive, onActivated } from 'vue'
+import { ref, reactive, computed, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDataList } from '@/api/data'
 import { createDataset, submitForReview } from '@/api/dataset'
@@ -221,37 +221,65 @@ import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
+
 function resetAll() {
-  // 筛选条件（场景标签，不再按模态筛选）
-  filters.weather = ''; filters.timeOfDay = ''; filters.terrain = ''; filters.obstacle = ''
-  // 查询结果
-  hitCount.value = null; matchedSamples.value = []; selectedIds.value = new Set()
-  samplePage.value = 1; sampleCount.value = 20
-  // 数据集信息
+  filters.modality = []
+  filters.weather = ''
+  filters.time_of_day = ''
+  filters.terrain = ''
+  filters.obstacle = ''
+  hitCount.value = null
+  matchedSamples.value = []
+  selectedIds.value = new Set()
+  samplePage.value = 1
+  sampleCount.value = 20
   datasetId.value = null
   datasetName.value = ''
-  // 子集划分
-  split.train = 70; split.val = 20; split.test = 10; split.strategy = 'random'
-  // 本地上传
-  uploadFiles.value = []; uploadDone.value = false
+  split.train = 70
+  split.val = 20
+  split.test = 10
+  split.strategy = 'random'
+  uploadFiles.value = []
+  uploadDone.value = false
   datasetName2.value = ''
-  uploadOpts.withAnnotation = false; uploadOpts.format = 'coco'; uploadOpts.modality = 'visible'
+  uploadOpts.withAnnotation = false
+  uploadOpts.format = 'coco'
+  uploadOpts.modality = 'visible'
+  statusText.value = 'frozen'
 }
 
 onActivated(() => {
   if (route.query.fresh === '1') {
     resetAll()
-    // 清除 fresh 参数，避免从样本详情返回时再次重置
     router.replace({ query: {} })
   }
 })
+
 const activeTab = ref('platform')
 const modalities = ['visible', 'infrared', 'mmwave', 'lidar']
-const categoryList = [{id:1,name:'电线杆'},{id:2,name:'桥梁'},{id:3,name:'建筑物'},{id:4,name:'树木'},{id:5,name:'路灯'}]
-function modLabel(m){ const map={visible:'可见光',infrared:'红外',mmwave:'毫米波',lidar:'激光雷达'}; return map[m]||m }
-// ---- 方式一：平台数据（按场景标签筛选，不按模态） ----
-const filters = reactive({ weather: '', timeOfDay: '', terrain: '', obstacle: '' })
-const split = reactive({ train:70, val:20, test:10, strategy:'random' })
+function modLabel(m) {
+  const map = { visible: '可见光', infrared: '红外', mmwave: '毫米波', lidar: '激光雷达' }
+  return map[m] || m
+}
+const statusText = ref('frozen')
+const statusLabel = computed(() => {
+  if (!datasetId.value) return '未创建'
+  const map = {
+    frozen: '已就绪',
+    published: '已发布',
+    draft: '已就绪',
+  }
+  return map[statusText.value] || statusText.value || '已就绪'
+})
+
+const filters = reactive({
+  modality: [],
+  weather: '',
+  time_of_day: '',
+  terrain: '',
+  obstacle: '',
+})
+const split = reactive({ train: 70, val: 20, test: 10, strategy: 'random' })
 const hitCount = ref(null)
 const datasetName = ref('')
 const datasetId = ref(null)
@@ -260,6 +288,70 @@ const samplePage = ref(1)
 const samplePageSize = ref(12)
 const sampleCount = ref(20)
 const selectedIds = ref(new Set())
+
+async function fetchAllResources(filterParams = {}) {
+  const pageSizeApi = 6000
+  let page = 1
+  let items = []
+  let apiTotal = Infinity
+  while (items.length < apiTotal) {
+    const { data } = await getDataList({
+      ...filterParams,
+      page,
+      size: pageSizeApi,
+    })
+    apiTotal = Number(data?.total ?? 0)
+    const chunk = data?.items || []
+    if (!chunk.length) break
+    items = items.concat(chunk)
+    if (chunk.length < pageSizeApi) break
+    page += 1
+  }
+  return items
+}
+
+function sampleKey(meta) {
+  return `${meta?.batch_id || 'unknown'}::${meta?.sample_group}`
+}
+
+function buildSampleGroups(rawItems) {
+  const groupMap = {}
+  rawItems
+    .filter(item => item.meta_info?.sample_group != null)
+    .forEach(item => {
+      const meta = item.meta_info || {}
+      const gid = sampleKey(meta)
+      if (!groupMap[gid]) {
+        groupMap[gid] = {
+          sample_id: gid,
+          group_no: meta.sample_group,
+          scene: meta.scene || '-',
+          batch_id: meta.batch_id || '',
+          images: [],
+          modality_count: 0,
+          _seenResource: new Set(),
+          _seenSensor: new Set(),
+        }
+      }
+      const g = groupMap[gid]
+      if (g._seenResource.has(item.resource_id)) return
+      const sensorKey = meta.sensor || `${item.modality}:${item.name}`
+      if (g._seenSensor.has(sensorKey)) return
+      g._seenResource.add(item.resource_id)
+      g._seenSensor.add(sensorKey)
+      g.images.push({
+        resource_id: item.resource_id,
+        modality: item.modality,
+        name: item.name,
+        sensor: meta.sensor || '',
+        thumbnail: `/api/images/${item.resource_id}/thumbnail`,
+        annotation_status: item.annotation_status,
+      })
+      g.modality_count = new Set(g.images.map(i => i.modality)).size
+    })
+  return Object.values(groupMap).map(({ _seenResource, _seenSensor, ...rest }) => rest)
+}
+
 function previewSelection() {
   const pool = [...matchedSamples.value]
   const n = Math.min(sampleCount.value, pool.length)
@@ -277,46 +369,45 @@ function toggleSelect(id) {
   selectedIds.value = s
   sampleCount.value = s.size
 }
+
 async function onSearch() {
+  if (!filters.modality || filters.modality.length === 0) {
+    ElMessage.warning('请先选择至少一种模态类型')
+    return
+  }
   try {
-    const f = filters
-    const { data } = await getDataList({
-      page: 1,
-      size: 6000,
-      weather: f.weather || undefined,
-      time_of_day: f.timeOfDay || undefined,
-      terrain: f.terrain || undefined,
-      obstacle: f.obstacle || undefined,
-    })
-    const items = (data.items || []).filter(item => item.meta_info?.sample_group)
-    // 按 sample_group 分组为样本
-    const groupMap = {}
-    items.forEach(item => {
-      const gid = item.meta_info.sample_group
-      if (!groupMap[gid]) groupMap[gid] = {
-        sample_id: gid,
-        scene: item.meta_info.scene || '-',
-        weather: item.meta_info.weather,
-        time_of_day: item.meta_info.time_of_day,
-        terrain: item.meta_info.terrain,
-        obstacle: item.meta_info.obstacle,
-        images: [],
-        modality_count: 0,
-        batch_id: item.meta_info.batch_id || '-',
+    // 场景条件与数据浏览一致；再按模态取全部分页并分组
+    const sceneParams = {
+      weather: filters.weather || undefined,
+      time_of_day: filters.time_of_day || undefined,
+      terrain: filters.terrain || undefined,
+      obstacle: filters.obstacle || undefined,
+    }
+    let rawItems = []
+    for (const m of filters.modality) {
+      const chunk = await fetchAllResources({ ...sceneParams, modality: m })
+      rawItems = rawItems.concat(chunk)
+    }
+    let all = buildSampleGroups(rawItems)
+    if (filters.modality.length > 1) {
+      all = all.filter(s => filters.modality.every(m => s.images.some(img => img.modality === m)))
+    }
+    all = all.map(s => {
+      const images = s.images.filter(img => filters.modality.includes(img.modality))
+      return {
+        ...s,
+        images,
+        modality_count: new Set(images.map(i => i.modality)).size,
       }
-      groupMap[gid].images.push({
-        resource_id: item.resource_id, modality: item.modality, name: item.name,
-        thumbnail: `/api/images/${item.resource_id}/thumbnail`,
-        annotation_status: item.annotation_status,
-      })
-      groupMap[gid].modality_count = groupMap[gid].images.length
     })
-    const all = Object.values(groupMap)
     hitCount.value = all.length
     matchedSamples.value = all
+    selectedIds.value = new Set()
     samplePage.value = 1
     sampleCount.value = Math.min(20, all.length)
-  } catch { /* backend not ready */ }
+  } catch {
+    ElMessage.error('查询失败')
+  }
 }
 async function onCreate(){
   if (selectedIds.value.size < 1) { ElMessage.warning('请至少选择1个样本'); return }
@@ -338,6 +429,7 @@ async function onCreate(){
       visibility: 'private'
     })
     datasetId.value = data.dataset_id
+    statusText.value = data.status || 'frozen'
     ElMessage.success(`已从 ${matchedSamples.value.length} 个样本中选取 ${selected.length} 个样本（${n} 个资源），数据集已创建，ID: ${data.dataset_id}`)
   } catch (e) {
     ElMessage.error(e?.response?.data?.detail || '创建数据集失败')
@@ -360,7 +452,7 @@ const datasetName2 = ref('')
 const uploadDone = ref(false)
 function onFileChange(file){ uploadFiles.value.push(file) }
 function onDrop(e){ const files = Array.from(e.dataTransfer.files); uploadFiles.value.push(...files) }
-function onUploadCreate(){ datasetId.value = Date.now(); statusText.value='draft'; uploadDone.value=true; ElMessage.success('数据集已创建（Mock）') }
+function onUploadCreate(){ datasetId.value = Date.now(); statusText.value='frozen'; uploadDone.value=true; ElMessage.success('数据集已创建（Mock）') }
 </script>
 
 <style scoped>
@@ -486,17 +578,16 @@ color:#1e293b;
 
 }
 .filter-row{
-
-display:grid;
-
-grid-template-columns:
-
-repeat(auto-fit,minmax(220px,1fr));
-
-gap:18px;
-
-align-items:center;
-
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.filter-row > .el-select {
+  width: 150px;
+}
+.filter-row > .el-select:first-child {
+  width: 180px;
 }
 
 .hit-info{

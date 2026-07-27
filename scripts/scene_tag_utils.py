@@ -32,17 +32,18 @@ TERRAIN_MAP = {
     "乡村": "rural",
 }
 
+# 与前端 SearchFilter 枚举对齐：power_tower / wind_turbine / building
 OBSTACLE_MAP = {
-    "高压": "pole",
-    "高压线塔": "pole",
-    "电线杆": "pole",
+    "高压": "power_tower",
+    "高压线塔": "power_tower",
+    "电线杆": "power_tower",
     "建筑": "building",
     "建筑物": "building",
     "桥梁": "bridge",
     "树木": "tree",
     "路灯": "lamp",
-    "风力": "wind",
-    "风力发电车": "wind",
+    "风力": "wind_turbine",
+    "风力发电车": "wind_turbine",
 }
 
 CAPTURE_DIR_RE = re.compile(

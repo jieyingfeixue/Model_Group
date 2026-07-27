@@ -3,32 +3,25 @@
     <el-select v-model="local.weather" placeholder="天气" @change="onChange">
       <el-option label="全部" value="" />
       <el-option label="晴天" value="sunny" />
-      <el-option label="多云" value="cloudy" />
       <el-option label="雨天" value="rainy" />
       <el-option label="雾天" value="foggy" />
     </el-select>
-    <el-select v-model="local.timeOfDay" placeholder="时段" @change="onChange">
+    <el-select v-model="local.time_of_day" placeholder="时段" @change="onChange">
       <el-option label="全部" value="" />
       <el-option label="白天" value="day" />
       <el-option label="夜晚" value="night" />
     </el-select>
     <el-select v-model="local.terrain" placeholder="地形" @change="onChange">
       <el-option label="全部" value="" />
-      <el-option label="平原" value="plain" />
       <el-option label="山地" value="mountain" />
+      <el-option label="平原" value="plain" />
       <el-option label="河流" value="river" />
-      <el-option label="城市" value="urban" />
-      <el-option label="高速" value="highway" />
-      <el-option label="乡村" value="rural" />
     </el-select>
     <el-select v-model="local.obstacle" placeholder="障碍物" @change="onChange">
       <el-option label="全部" value="" />
-      <el-option label="高压/电线杆" value="pole" />
+      <el-option label="高压线塔" value="power_tower" />
+      <el-option label="风力发电车" value="wind_turbine" />
       <el-option label="建筑物" value="building" />
-      <el-option label="风力" value="wind" />
-      <el-option label="桥梁" value="bridge" />
-      <el-option label="树木" value="tree" />
-      <el-option label="路灯" value="lamp" />
     </el-select>
     <el-button @click="onReset">重置</el-button>
   </div>
@@ -42,7 +35,7 @@ const emit = defineEmits(['update:modelValue'])
 
 const local = reactive({
   weather: props.modelValue?.weather || '',
-  timeOfDay: props.modelValue?.timeOfDay || '',
+  time_of_day: props.modelValue?.time_of_day || '',
   terrain: props.modelValue?.terrain || '',
   obstacle: props.modelValue?.obstacle || '',
 })
@@ -51,7 +44,7 @@ function onChange() {
   emit('update:modelValue', { ...local })
 }
 function onReset() {
-  Object.assign(local, { weather: '', timeOfDay: '', terrain: '', obstacle: '' })
+  Object.assign(local, { weather: '', time_of_day: '', terrain: '', obstacle: '' })
   emit('update:modelValue', { ...local })
 }
 </script>

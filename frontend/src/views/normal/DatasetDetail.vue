@@ -21,57 +21,26 @@
 
   <div class="stats">
     <div class="stat-card">
-
-    <div class="icon">📦</div>
-
-    <h2>{{ dataset.sample_count }}</h2>
-
-    <span>样本数量</span>
-
+      <div class="icon">📦</div>
+      <h2>{{ dataset.sample_count }}</h2>
+      <span>样本数量</span>
     </div>
 
     <div class="stat-card">
-
-    <div class="icon">✅</div>
-
-    <h2>{{ dataset.annotated_count }}</h2>
-
-    <span>已标注</span>
-
+      <div class="icon">📈</div>
+      <h2>{{ annotationRate }}%</h2>
+      <span>标注完成率</span>
     </div>
 
     <div class="stat-card">
-
-    <div class="icon">📈</div>
-
-    <h2>
-
-    {{ Math.round(dataset.annotated_count*100/dataset.sample_count) }}%
-
-    </h2>
-
-    <span>完成率</span>
-
+      <div class="icon">
+        {{ dataset.visibility==='public'?'🌍':'🔒' }}
+      </div>
+      <h2>
+        {{ dataset.visibility==='public'?'公开':'私有' }}
+      </h2>
+      <span>权限</span>
     </div>
-
-    <div class="stat-card">
-
-    <div class="icon">
-
-    {{ dataset.visibility==='public'?'🌍':'🔒' }}
-
-    </div>
-
-    <h2>
-
-    {{ dataset.visibility==='public'?'公开':'私有' }}
-
-    </h2>
-
-    <span>权限</span>
-
-    </div>
-
   </div>
 
   <div class="card">
@@ -128,60 +97,161 @@
   <div class="card" v-if="sampleData.length > 0">
     <h3>包含样本 ({{ sampleData.length }})</h3>
     <div class="sample-grid">
-      <div v-for="s in sampleData" :key="s.sample_id" class="sample-item">
+      <div
+        v-for="s in pagedSamples"
+        :key="s.sample_id"
+        class="sample-item"
+        @click="openSample(s)"
+      >
         <div class="thumb-row">
-          <div v-for="img in s.images.slice(0,4)" :key="img.resource_id" class="mini-thumb" :class="img.modality">
-            <span class="mod-label">{{ modShort(img.modality) }}</span>
+          <div
+            v-for="img in displayThumbs(s)"
+            :key="img.resource_id"
+            class="mini-thumb"
+            :class="img.modality"
+          >
+            <span class="mod-tag">{{ modShort(img.modality, img) }}</span>
+            <img :src="img.thumbnail" loading="lazy" @error="onThumbError" />
+          </div>
+          <div
+            v-for="n in Math.max(0, 4 - displayThumbs(s).length)"
+            :key="'empty-'+n"
+            class="mini-thumb empty"
+          >
+            <span>—</span>
           </div>
         </div>
         <div class="sample-meta">
-          <span>#{{ s.sample_id }}</span>
+          <span>#{{ s.group_no ?? s.sample_id }}</span>
           <span>{{ s.scene }}</span>
           <span>{{ s.modality_count }}模态</span>
         </div>
       </div>
     </div>
+    <el-pagination
+      v-if="sampleData.length > pageSize"
+      background
+      layout="prev, pager, next"
+      :total="sampleData.length"
+      :page-size="pageSize"
+      :current-page="currentPage"
+      @current-change="currentPage = $event"
+      style="margin-top:16px;justify-content:center;"
+    />
   </div>
 </div>
 <div v-else class="loading">加载中...</div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getDatasetDetail } from '@/api/dataset'
-import { getDataList } from '@/api/data'
+import request from '@/api/request'
 
 const route = useRoute()
-function modShort(m) {
+const router = useRouter()
+
+const THUMB_SLOTS = [
+  { modality: 'visible', prefer: 'DA8679037', label: '设备1' },
+  { modality: 'infrared', prefer: null, label: '红外' },
+  { modality: 'mmwave', prefer: null, label: '毫米波' },
+  { modality: 'lidar', prefer: null, label: '激光雷达' },
+]
+
+function modShort(m, img) {
+  if (img?._slotLabel) return img._slotLabel
   const map = { visible: '可见光', infrared: '红外', mmwave: '毫米波', lidar: '激光雷达' }
   return map[m] || m
 }
+
+function displayThumbs(sample) {
+  const images = sample?.images || []
+  const used = new Set()
+  const result = []
+  for (const slot of THUMB_SLOTS) {
+    const candidates = images.filter(
+      img => (img.modality || '') === slot.modality && !used.has(img.resource_id)
+    )
+    if (!candidates.length) continue
+    let pick = candidates[0]
+    if (slot.prefer) {
+      const preferred = candidates.find(img =>
+        String(img.sensor || img.name || '').includes(slot.prefer)
+      )
+      if (preferred) pick = preferred
+    }
+    used.add(pick.resource_id)
+    result.push({ ...pick, _slotLabel: slot.label })
+  }
+  // 若按标准槽位凑不满 4 张，用剩余图补齐（兼容只选部分模态的数据集）
+  if (result.length < 4) {
+    for (const img of images) {
+      if (used.has(img.resource_id)) continue
+      used.add(img.resource_id)
+      result.push(img)
+      if (result.length >= 4) break
+    }
+  }
+  return result.slice(0, 4)
+}
+
+function onThumbError(e) {
+  e.target.style.opacity = '0.25'
+}
+
+function openSample(s) {
+  router.push({
+    name: 'SampleDetail',
+    params: { id: String(s.group_no ?? s.sample_id) },
+    query: { batch: s.batch_id || undefined },
+  })
+}
+
 const dataset = ref(null)
 const sampleData = ref([])
+const currentPage = ref(1)
+const pageSize = 10
+
+const annotationRate = computed(() => {
+  const total = Number(dataset.value?.sample_count || 0)
+  const annotated = Number(dataset.value?.annotated_count || 0)
+  if (!total) return 0
+  return Math.round((annotated * 100) / total)
+})
+
+const pagedSamples = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return sampleData.value.slice(start, start + pageSize)
+})
 
 onMounted(async () => {
   try {
     const { data } = await getDatasetDetail(route.params.id)
     dataset.value = data
-    // 从后端获取数据集的样本图片
     try {
-      const res = await getDataList({ page: 1, size: 6000 })
-      const items = (res.data.items || []).filter(item => item.meta_info?.sample_group)
-      // 后端会通过 dataset_items 表关联，这里先展示前20个样本
-      const groupMap = {}
-      items.slice(0, 80).forEach(item => {
-        const gid = item.meta_info.sample_group
-        if (!gid) return
-        if (!groupMap[gid]) groupMap[gid] = { sample_id: gid, scene: item.meta_info.scene || '-', images: [], modality_count: 0 }
-        groupMap[gid].images.push({
-          resource_id: item.resource_id, modality: item.modality, name: item.name,
-          thumbnail: `/api/images/${item.resource_id}/thumbnail`, annotation_status: item.annotation_status
-        })
-        groupMap[gid].modality_count = groupMap[gid].images.length
+      const res = await request.get(`/datasets/${route.params.id}/items`)
+      const samples = res.data?.samples || []
+      sampleData.value = samples.map(s => {
+        const images = (s.resources || []).map(r => ({
+          resource_id: r.resource_id,
+          modality: r.modality,
+          name: r.name,
+          sensor: r.sensor || '',
+          thumbnail: `/api/images/${r.resource_id}/thumbnail`,
+          annotation_status: r.annotation_status,
+        }))
+        return {
+          sample_id: s.sample_id || `${s.batch_id || 'unknown'}::${s.sample_group}`,
+          group_no: s.sample_group,
+          batch_id: s.batch_id || '',
+          scene: s.scene || '-',
+          modality_count: new Set(images.map(i => i.modality)).size,
+          images,
+        }
       })
-      sampleData.value = Object.values(groupMap).slice(0, 12)
-    } catch { /* sample data optional */ }
+      currentPage.value = 1
+    } catch { /* sample preview optional */ }
   } catch {
     dataset.value = null
   }
@@ -225,8 +295,7 @@ box-shadow:
 .hero p{ font-size:16px; opacity:.92; line-height:1.8; }
 .stats{
 display:grid;
-grid-template-columns:
-repeat(4,1fr);
+grid-template-columns: repeat(3, 1fr);
 gap:22px;
 margin-bottom:30px;
 }
@@ -302,6 +371,7 @@ transition:.3s;
 
 box-shadow:
 0 4px 12px rgba(15,23,42,.04);
+cursor:pointer;
 
 }
 
@@ -313,12 +383,27 @@ box-shadow:
 0 12px 28px rgba(15,23,42,.12);
 
 }
-.thumb-row{ display:grid; grid-template-columns:1fr 1fr; gap:2px; margin-bottom:8px; }
-.mini-thumb{ height:60px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; }
-.mini-thumb.visible{ background:#3b82f6; }
-.mini-thumb.infrared{ background:#ef4444; }
-.mini-thumb.mmwave{ background:#7c3aed; }
-.mini-thumb.lidar{ background:#0891b2; }
-.mod-label{ font-weight:600; }
-.sample-meta{ display:flex; gap:8px; font-size:12px; color:#6b7280; }
+.thumb-row{ display:grid; grid-template-columns:1fr 1fr; gap:2px; margin-bottom:8px; background:#e2e8f0; border-radius:8px; overflow:hidden; padding:2px; }
+.mini-thumb{
+  position:relative;
+  aspect-ratio:1;
+  height:auto;
+  min-height:72px;
+  border-radius:6px;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  color:#fff;
+  background:#0f172a;
+}
+.mini-thumb img{ width:100%; height:100%; object-fit:cover; }
+.mini-thumb.empty{ background:#f1f5f9; color:#cbd5e1; font-size:18px; }
+.mod-tag{
+  position:absolute; top:4px; left:4px; z-index:1;
+  font-size:10px; padding:1px 6px; border-radius:8px;
+  background:rgba(0,0,0,.55); color:#fff;
+}
+.sample-meta{ display:flex; gap:8px; font-size:12px; color:#6b7280; flex-wrap:wrap; }
 </style>

@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
 from bisect import bisect_left
 from collections import defaultdict
@@ -64,12 +65,14 @@ SENSOR_CONFIG = {
     "hikrobot_camera__DA8679038__image_raw": {"modality": "visible", "device": "海康 DA8679038"},
     "usb_ir__image_raw": {"modality": "infrared", "device": "USB 红外"},
     "at360__points": {"modality": "lidar", "device": "AT360 激光雷达"},
+    "mmwave_udp_radar": {"modality": "mmwave", "device": "毫米波雷达"},
 }
 
 IR_NAME = "usb_ir__image_raw"
 VIS1_NAME = "hikrobot_camera__DA8679037__image_raw"
 VIS2_NAME = "hikrobot_camera__DA8679038__image_raw"
 LIDAR_NAME = "at360__points"
+MMWAVE_NAME = "mmwave_udp_radar"
 
 ADMIN_ID = int(os.environ.get("IMPORT_OWNER_ID", "0"))  # 0 = 自动选择/创建
 
@@ -141,6 +144,22 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def win_long_path(path: Path | str) -> str:
+    """Windows 下路径常超 MAX_PATH(260)，需 \\?\ 前缀才能访问可见光长文件名。"""
+    p = str(path)
+    if os.name != "nt":
+        return p
+    try:
+        p = str(Path(p).resolve())
+    except OSError:
+        p = os.path.abspath(p)
+    if p.startswith("\\\\?\\"):
+        return p
+    if p.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + p[2:]
+    return "\\\\?\\" + p
+
+
 def extract_timestamp(filename: str) -> float | None:
     m = re.search(r"_t(\d{6})\.(\d{3})", filename)
     if m:
@@ -149,13 +168,15 @@ def extract_timestamp(filename: str) -> float | None:
 
 
 def is_usable_file(path: Path) -> bool:
-    """跳过群晖 @eaDir、网盘未落地占位、空文件。"""
+    """跳过群晖 @eaDir、网盘未落地占位、空文件；Windows 长路径可用。"""
     if any(part.startswith("@") for part in path.parts):
         return False
     try:
-        if not path.is_file():
+        lp = win_long_path(path)
+        st = os.stat(lp)
+        if not stat.S_ISREG(st.st_mode):
             return False
-        if path.stat().st_size <= 0:
+        if st.st_size <= 0:
             return False
         return True
     except OSError:
@@ -167,9 +188,12 @@ def list_sensor_files(sensor_dir: Path) -> list[tuple[Path, float, str]]:
         return []
     out: list[tuple[Path, float, str]] = []
     try:
-        names = sorted(os.listdir(sensor_dir))
+        names = sorted(os.listdir(win_long_path(sensor_dir) if os.name == "nt" else sensor_dir))
     except OSError:
-        return []
+        try:
+            names = sorted(os.listdir(sensor_dir))
+        except OSError:
+            return []
     for name in names:
         if name.startswith("@"):
             continue
@@ -234,6 +258,67 @@ def nearest_index(timestamps: list[float], target: float) -> int:
     return idx - 1 if (target - left) <= (right - target) else idx
 
 
+def parse_part_wall_ts(part_name: str) -> float | None:
+    """从 part 目录名解析墙钟时间戳（秒）。"""
+    from datetime import datetime
+
+    m = re.search(r"_(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})$", part_name)
+    if not m:
+        return None
+    y, mo, d, h, mi, s = map(int, m.groups())
+    return datetime(y, mo, d, h, mi, s).timestamp()
+
+
+def part_session_offsets(part_names: list[str]) -> dict[str, float]:
+    """各 part 相对最早 part 的会话时间偏移（秒）。"""
+    walls = {p: parse_part_wall_ts(p) for p in part_names}
+    valid = {p: t for p, t in walls.items() if t is not None}
+    if not valid:
+        return {p: 0.0 for p in part_names}
+    t0 = min(valid.values())
+    return {p: (valid[p] - t0) if p in valid else 0.0 for p in part_names}
+
+
+def discover_mmwave_frames(capture_dir: Path) -> list[tuple[Path, int, float, str]]:
+    """扫描会话根下 mmwave_* 目录，返回 [(mat_path, frame_idx, session_ts, display_name)]。
+
+    时间轴：文件名 FZxxxxx-yyyyy 按毫秒理解，帧在区间内均匀插值。
+    """
+    out: list[tuple[Path, int, float, str]] = []
+    mm_dirs = [
+        p
+        for p in capture_dir.iterdir()
+        if p.is_dir() and "mmwave" in p.name.lower() and not p.name.startswith("@")
+    ]
+    if not mm_dirs:
+        return out
+
+    for mm_dir in sorted(mm_dirs, key=lambda p: p.name):
+        mats = sorted(mm_dir.glob("*.mat"))
+        for mat_path in mats:
+            m = re.search(r"FZ(\d+)-(\d+)", mat_path.name, re.IGNORECASE)
+            if not m:
+                continue
+            fz_a, fz_b = int(m.group(1)), int(m.group(2))
+            try:
+                import scipy.io as sio
+
+                data = sio.loadmat(win_long_path(mat_path), simplify_cells=True)
+                n = len(data.get("Data_Ori", []))
+            except Exception as exc:
+                print(f"  [WARN] 无法读取 mmwave mat {mat_path.name}: {exc}")
+                continue
+            if n <= 0:
+                continue
+            for i in range(n):
+                fz = fz_a + (fz_b - fz_a) * ((i + 0.5) / n)
+                session_ts = fz / 1000.0  # FZ ≈ 毫秒
+                display = f"{mat_path.name}::frame{i}"
+                out.append((mat_path, i, session_ts, display))
+    out.sort(key=lambda x: x[2])
+    return out
+
+
 def build_groups(
     sensor_files: dict[str, list[tuple[Path, float, str]]],
 ) -> list[list[tuple[Path, float, str, str, str, bool]]]:
@@ -269,7 +354,7 @@ def build_groups(
 
 def read_image_info(fpath: Path) -> dict:
     try:
-        with Image.open(fpath) as img:
+        with Image.open(win_long_path(fpath)) as img:
             w, h = img.size
             c = len(img.getbands())
         return {"width": w, "height": h, "channels": c}
@@ -286,7 +371,8 @@ def upload_to_minio(local_path: Path, object_name: str) -> str:
         if ext == ".png"
         else "application/octet-stream"
     )
-    MINIO.fput_object(BUCKET, object_name, str(local_path), content_type=content_type)
+    src = win_long_path(local_path)
+    MINIO.fput_object(BUCKET, object_name, src, content_type=content_type)
     return f"/{BUCKET}/{object_name}"
 
 
@@ -375,6 +461,17 @@ def main() -> None:
     for part, seg in segments:
         print(f"  - {part} / {seg.name}")
 
+    print("\n阶段 0.5: 扫描毫米波 MAT")
+    mmwave_frames = discover_mmwave_frames(capture_dir)
+    mm_ts_list = [t for _, _, t, _ in mmwave_frames]
+    print(f"  mmwave 帧数: {len(mmwave_frames)}")
+    if mmwave_frames:
+        print(f"  mmwave 时间范围: {mm_ts_list[0]:.3f} ~ {mm_ts_list[-1]:.3f} s")
+
+    part_names = list({p for p, _ in segments})
+    part_offsets = part_session_offsets(part_names)
+    print(f"  part 会话偏移: { {k: round(v,1) for k,v in part_offsets.items()} }")
+
     # 汇总所有对齐组
     all_groups: list[tuple[str, str, list]] = []  # part, segment_name, group
     for part_name, segment_dir in segments:
@@ -387,7 +484,21 @@ def main() -> None:
             print("  [SKIP] 无可用红外文件")
             continue
         groups = build_groups(sensor_files)
-        print(f"  对齐组: {len(groups)}")
+        # 按会话时间对齐毫米波
+        off = part_offsets.get(part_name, 0.0)
+        mm_hit = 0
+        if mmwave_frames:
+            for g in groups:
+                ir_ts = g[0][1]
+                session_ts = off + float(ir_ts)
+                idx = nearest_index(mm_ts_list, session_ts)
+                if idx >= 0:
+                    mat_path, frame_idx, mts, dname = mmwave_frames[idx]
+                    # 时间差过大则跳过（>2s）
+                    if abs(mts - session_ts) <= 2.0:
+                        g.append((mat_path, mts, dname, MMWAVE_NAME, "mmwave", False))
+                        mm_hit += 1
+        print(f"  对齐组: {len(groups)}（其中含毫米波 {mm_hit}）")
         for g in groups:
             all_groups.append((part_name, segment_dir.name, g))
 
@@ -448,18 +559,27 @@ def main() -> None:
 
             resource_ids_in_group: list[int] = []
             for fpath, ts_val, fname, sensor_name, modality, is_primary in group:
-                object_name = f"{batch_id}/{part_name}/{segment_name}/{sensor_name}/{fname}"
+                mmwave_frame_index = None
+                if modality == "mmwave" and "::frame" in fname:
+                    try:
+                        mmwave_frame_index = int(fname.rsplit("::frame", 1)[-1])
+                    except ValueError:
+                        mmwave_frame_index = 0
+                    object_name = f"{batch_id}/mmwave/{fpath.name}"
+                else:
+                    object_name = f"{batch_id}/{part_name}/{segment_name}/{sensor_name}/{fname}"
                 file_path = upload_to_minio(fpath, object_name)
                 total_uploaded += 1
 
-                img_info = read_image_info(fpath) if modality != "lidar" else {
-                    "width": 0, "height": 0, "channels": 0
-                }
+                if modality in ("lidar", "mmwave"):
+                    img_info = {"width": 0, "height": 0, "channels": 0}
+                else:
+                    img_info = read_image_info(fpath)
                 metadata = {
                     "width": img_info["width"],
                     "height": img_info["height"],
                     "channels": img_info["channels"],
-                    "file_size": f"{fpath.stat().st_size // 1024}KB",
+                    "file_size": f"{os.stat(win_long_path(fpath)).st_size // 1024}KB",
                     "device": SENSOR_CONFIG.get(sensor_name, {}).get("device", ""),
                     "sensor": sensor_name,
                     "part": part_name,
@@ -469,13 +589,15 @@ def main() -> None:
                     "is_primary": is_primary,
                     "modality": modality,
                 }
+                if mmwave_frame_index is not None:
+                    metadata["mmwave_frame_index"] = mmwave_frame_index
                 # 会话级场景标签（Excel）
                 metadata.update(scene_tags)
                 metadata["batch_id"] = batch_id
 
                 rid = insert_resource(
                     db,
-                    name=fname,
+                    name=fname if modality != "mmwave" else fpath.name,
                     modality=modality,
                     file_path=file_path,
                     captured_at=ts_val,

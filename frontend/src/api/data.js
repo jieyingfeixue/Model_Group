@@ -4,40 +4,26 @@ const USE_MOCK = false  // 后端已就绪
 
 export function uploadData(formData)            { return request.post('/data/upload', formData) }
 
-export async function getDataList(params = {}) {
-  // 后端: GET /api/data — 支持场景标签筛选 weather/time_of_day/terrain/obstacle
-  const query = {
+export async function getDataList(params) {
+  // 后端接口: GET /api/data?page=1&size=20&modality=visible&scene=daytime&weather=sunny...
+  const apiParams = {
     page: params.page || 1,
     size: params.page_size || params.size || 20,
   }
-  const passKeys = [
-    'modality',
-    'annotation_status',
-    'status',
-    'scene',
-    'weather',
-    'time_of_day',
-    'terrain',
-    'obstacle',
-    'batch_id',
-    'sample_group',
-    'start_time',
-    'end_time',
-  ]
-  for (const key of passKeys) {
-    const val = params[key]
-    if (val !== undefined && val !== null && val !== '') {
-      query[key] = val
+  // 转发所有筛选参数
+  const filterFields = ['modality', 'scene', 'weather', 'time_of_day', 'terrain', 'obstacle',
+    'annotation_status', 'status', 'batch_id', 'sample_group', 'start_time', 'end_time']
+  filterFields.forEach(f => {
+    if (params[f] !== undefined && params[f] !== '' && params[f] !== null) {
+      apiParams[f] = params[f]
     }
-  }
-  return request.get('/data', { params: query })
+  })
+  return request.get('/data', { params: apiParams })
 }
 
 export async function getDataDetail(id) {
-  // 后端无单条查询接口，从列表获取全部并筛选
-  const res = await request.get('/data', { params: { page: 1, size: 6000 } })
-  const items = res.data?.items || []
-  return { data: items.find(item => item.resource_id === Number(id)) }
+  // 后端: GET /api/data/{resource_id}
+  return request.get(`/data/${id}`)
 }
 
 // 后端暂未提供版本历史接口，保留函数签名后续对接

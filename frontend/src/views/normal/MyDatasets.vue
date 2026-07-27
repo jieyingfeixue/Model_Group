@@ -6,7 +6,7 @@
       <h1>📚 我的数据集</h1>
       <p>
         管理个人创建的数据集，
-        支持冻结、发布、归档及版本管理。
+        支持标注、提交公开申请及版本管理。
       </p>
     </div>
 
@@ -25,9 +25,9 @@
     </div>
 
     <div class="stat-card">
-      <div class="icon">📝</div>
-      <h2>{{ datasets.filter(d=>d.status==='draft').length }}</h2>
-      <span>草稿</span>
+      <div class="icon">🔒</div>
+      <h2>{{ datasets.filter(d=>d.status!=='published').length }}</h2>
+      <span>私有</span>
     </div>
   </div>
 
@@ -122,7 +122,7 @@ async function fetchDatasets() {
 async function onSubmitReview(row){
   try {
     await submitForReview(row.dataset_id)
-    row.review_status = 'submitted'
+    row.review_status = 'pending_review'
     ElMessage.success('已提交公开申请，等待审核员审批')
   } catch (e) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
 }

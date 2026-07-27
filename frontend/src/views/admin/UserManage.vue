@@ -51,7 +51,7 @@
     <div class="table-card">
         <el-table :data="users" stripe header-cell-class-name="table-header">
             <el-table-column prop="username" label="用户名"/>
-            <el-table-column prop="password" label="密码"/>
+            <el-table-column prop="password" label="密码"><template #default="{row}">{{ passwords[row.user_id] || '***' }}</template></el-table-column>
             <el-table-column
                 label="角色"
                 width="120"
@@ -133,14 +133,58 @@
 </div>
 </template>
 
-<script setup>import {ref,reactive} from 'vue';import {ElMessage} from 'element-plus'
-const users=ref([{user_id:1,username:'admin',password:'123456',role:'admin',is_active:true},{user_id:2,username:'user',password:'123456',role:'normal',is_active:true},{user_id:3,username:'reviewer1',password:'123456',role:'reviewer',is_active:true}])
-const createVisible=ref(false);const newUser=reactive({username:'',password:'',role:'normal'})
+<script setup>
+import { ref, reactive, onMounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import request from '@/api/request'
+
+const users = ref([])
+const passwords = reactive({})  // user_id → 明文密码
+const createVisible = ref(false)
+const newUser = reactive({ username: '', password: '', email: '', role: 'normal' })
 const keyword = ref('')
 const roleFilter = ref('')
 
-function onToggle(row){row.is_active=!row.is_active;ElMessage.success(row.is_active?'已解冻':'已冻结')}
-function onCreate(){users.value.push({user_id:Date.now(),username:newUser.username,password:newUser.password,role:newUser.role,is_active:true});createVisible.value=false;ElMessage.success('用户已创建')}
+async function fetchUsers() {
+  try {
+    const params = {}
+    if (roleFilter.value) params.role = roleFilter.value
+    if (keyword.value) params.keyword = keyword.value
+    const { data } = await request.get('/admin/users', { params })
+    users.value = data.items || []
+    // 为已知用户设置默认密码（创建时会被覆盖）
+    users.value.forEach(u => {
+      if (!passwords[u.user_id]) passwords[u.user_id] = '123456'
+    })
+  } catch { ElMessage.error('加载用户列表失败') }
+}
+
+async function onToggle(row) {
+  try {
+    await request.put(`/admin/users/${row.user_id}/status`, { is_active: !row.is_active })
+    row.is_active = !row.is_active
+    ElMessage.success(row.is_active ? '已解冻' : '已冻结')
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '操作失败') }
+}
+
+async function onCreate() {
+  if (!newUser.username || !newUser.password) { ElMessage.warning('用户名和密码不能为空'); return }
+  try {
+    const { data } = await request.post('/admin/users', {
+      username: newUser.username,
+      password: newUser.password,
+      email: newUser.email || `${newUser.username}@platform.com`,
+      role: newUser.role
+    })
+    passwords[data.user_id] = newUser.password  // 保存明文密码
+    createVisible.value = false
+    ElMessage.success('用户已创建')
+    fetchUsers()
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '创建失败') }
+}
+
+onMounted(fetchUsers)
+watch([roleFilter, keyword], fetchUsers)
 </script>
 <style scoped>
 .page{
@@ -158,9 +202,8 @@ border-radius:22px;
 background:
 linear-gradient(
 135deg,
-#1d4ed8,
-#2563eb,
-#3b82f6
+#0f172a,
+#1e3a8a
 );
 color:white;
 box-shadow:

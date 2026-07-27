@@ -25,7 +25,7 @@ class Dataset(Base):
         String(20), nullable=False, default="v1.0", server_default="v1.0"
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="draft", server_default="draft"
+        String(20), nullable=False, default="frozen", server_default="frozen"
     )
     archive_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="active", server_default="active"
