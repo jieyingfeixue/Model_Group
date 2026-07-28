@@ -15,10 +15,42 @@ from app.schemas.review import (
     DatasetReviewListResponse,
     DatasetVerdictRequest,
     DatasetVerdictResponse,
+    ReviewStatsResponse,
 )
 from app.services import reviewer_dataset_service, reviewer_annotation_service
 
 router = APIRouter(prefix="/review", tags=["Review"])
+
+
+# ════════════════════════════════════════════════════════════
+#  审核统计
+# ════════════════════════════════════════════════════════════
+
+@router.get("/stats", response_model=ReviewStatsResponse)
+def get_review_stats(
+    current_user: User = Depends(require_role("admin", "reviewer")),
+    db: Session = Depends(get_db),
+):
+    """审核员统计数据概览"""
+    from app.models.dataset import Dataset
+
+    pending = db.query(Dataset).filter(
+        Dataset.review_status == "submitted"
+    ).count()
+    reviewing = db.query(Dataset).filter(
+        Dataset.review_status == "reviewing"
+    ).count()
+    approved = db.query(Dataset).filter(
+        Dataset.review_status == "approved"
+    ).count()
+
+    return ReviewStatsResponse(
+        pending_datasets=pending,
+        pending_annotations=0,
+        claimed_datasets=reviewing,
+        claimed_annotations=0,
+        approved_datasets=approved,
+    )
 
 
 # ════════════════════════════════════════════════════════════

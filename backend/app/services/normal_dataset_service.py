@@ -45,10 +45,26 @@ def _dataset_sample_stats(db: Session, dataset_id: int) -> tuple[int, int]:
     return sample_count, annotated_count
 
 
+def _subset_sample_counts(db: Session, dataset_id: int) -> dict[str, int]:
+    """按样本组统计各子集数量，返回 {train: N, val: M, test: K}"""
+    rows = (
+        db.query(DatasetItem.subset, DataResource.meta_info, DataResource.resource_id)
+        .join(DataResource, DataResource.resource_id == DatasetItem.resource_id)
+        .filter(DatasetItem.dataset_id == dataset_id)
+        .all()
+    )
+    sets: dict[str, set] = {"train": set(), "val": set(), "test": set()}
+    for subset, meta, rid in rows:
+        key = _sample_group_key(meta if isinstance(meta, dict) else None, rid)
+        if subset in sets:
+            sets[subset].add(key)
+    return {k: len(v) for k, v in sets.items()}
+
+
 def _build_response(db: Session, dataset: Dataset) -> dict[str, Any]:
     """将 ORM 对象转为包含统计信息的响应字典"""
-    counts = DatasetItem.count_by_subset(db, dataset.dataset_id)
     sample_count, annotated_count = _dataset_sample_stats(db, dataset.dataset_id)
+    subset_counts = _subset_sample_counts(db, dataset.dataset_id)
     return {
         "dataset_id": dataset.dataset_id,
         "name": dataset.name,
@@ -63,8 +79,8 @@ def _build_response(db: Session, dataset: Dataset) -> dict[str, Any]:
         "review_status": dataset.review_status,
         "sample_count": sample_count,
         "annotated_count": annotated_count,
-        "image_count": sum(counts.values()),
-        "subset_counts": counts,
+        "image_count": sum(DatasetItem.count_by_subset(db, dataset.dataset_id).values()),
+        "subset_counts": subset_counts,
         "created_at": dataset.created_at.isoformat() if dataset.created_at else None,
         "updated_at": dataset.updated_at.isoformat() if dataset.updated_at else None,
     }

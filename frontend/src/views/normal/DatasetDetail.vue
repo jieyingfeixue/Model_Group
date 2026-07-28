@@ -69,6 +69,30 @@
 
       <div class="info-item">
 
+      <span>训练集</span>
+
+      <strong>{{ dataset.subset_counts?.train || 0 }} 条</strong>
+
+      </div>
+
+      <div class="info-item">
+
+      <span>验证集</span>
+
+      <strong>{{ dataset.subset_counts?.val || 0 }} 条</strong>
+
+      </div>
+
+      <div class="info-item">
+
+      <span>测试集</span>
+
+      <strong>{{ dataset.subset_counts?.test || 0 }} 条</strong>
+
+      </div>
+
+      <div class="info-item">
+
       <span>可见范围</span>
 
       <el-tag

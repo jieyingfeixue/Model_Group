@@ -57,10 +57,12 @@ def list_datasets(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """查询数据集列表。默认为当前用户的全部数据集。"""
+    """查询数据集列表。携带 visibility=public 时查询市场（全用户），否则仅查自己的数据集。"""
+    # 数据集市场：查全用户公开数据集；个人中心：仅查自己的
+    owner = None if visibility == "public" else current_user.user_id
     items, total = normal_dataset_service.list_datasets(
         db,
-        owner_id=current_user.user_id,
+        owner_id=owner,
         visibility=visibility,
         keyword=keyword,
         page=page,

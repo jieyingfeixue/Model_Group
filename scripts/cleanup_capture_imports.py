@@ -20,7 +20,6 @@ from sqlalchemy import create_engine, text
 DB_URL = "postgresql://postgres:123456@localhost:5432/detection_platform"
 
 DEFAULT_BATCHES = [
-    "with_cameras_capture_20260427_151113",
     "with_cameras_capture_20260430_202854",
 ]
 

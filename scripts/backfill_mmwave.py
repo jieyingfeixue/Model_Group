@@ -36,6 +36,7 @@ DB_URL = os.environ.get(
     "DATABASE_URL", "postgresql://postgres:123456@localhost:5432/detection_platform"
 )
 DEFAULT_BATCH = "with_cameras_capture_20260430_202854"
+DEFAULT_CAPTURE = Path(r"D:\桌面\with_cameras_capture_20260430_202854")
 
 
 def win_long_path(p: Path | str) -> str:
@@ -127,7 +128,7 @@ def main() -> None:
     p.add_argument("--max-diff", type=float, default=2.0, help="对齐最大时间差（秒）")
     args = p.parse_args()
 
-    capture_dir = Path(args.capture) if args.capture else BASE_DIR / args.batch
+    capture_dir = Path(args.capture) if args.capture else DEFAULT_CAPTURE
     if not capture_dir.is_dir():
         raise SystemExit(f"找不到采集目录: {capture_dir}")
 

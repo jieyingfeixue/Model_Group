@@ -30,6 +30,7 @@ const routes = [
       { path: 'eval/:taskId', name: 'EvalReport', component: () => import('@/views/normal/EvalReport.vue') },
       { path: 'compare', name: 'CompareBoard', component: () => import('@/views/normal/CompareBoard.vue') },
       { path: 'review/datasets', name: 'DatasetReview', component: () => import('@/views/reviewer/DatasetReview.vue') },
+      { path: 'review/datasets/:id', name: 'DatasetReviewDetail', component: () => import('@/views/reviewer/DatasetReviewDetail.vue') },
       { path: 'review/annotations', name: 'AnnotationReview', component: () => import('@/views/reviewer/AnnotationReview.vue') },
       { path: 'admin/users', name: 'UserManage', component: () => import('@/views/admin/UserManage.vue') },
       { path: 'admin/labels', name: 'LabelManage', component: () => import('@/views/admin/LabelManage.vue') },

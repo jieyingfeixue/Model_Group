@@ -35,7 +35,7 @@ class DatasetReviewListResponse(BaseModel):
 class DatasetVerdictRequest(BaseModel):
     """数据集审核裁决请求"""
     verdict: str = Field(..., description="approved / rejected")
-    notes: str | None = Field(default=None, description="审核备注")
+    notes: Any = Field(default=None, description="审核备注（字符串或字典均可）")
 
 
 class DatasetVerdictResponse(BaseModel):
@@ -98,3 +98,4 @@ class ReviewStatsResponse(BaseModel):
     pending_annotations: int = 0
     claimed_datasets: int = 0
     claimed_annotations: int = 0
+    approved_datasets: int = 0

@@ -7,9 +7,9 @@
   </div>
 
   <div class="stats">
-    <div class="stat-card"><div class="icon">📋</div><h2>{{ items.length }}</h2><span>待审核数据集</span></div>
-    <div class="stat-card"><div class="icon">🔍</div><h2>{{ items.filter(i=>i.review_status==='reviewing').length }}</h2><span>审核中</span></div>
-    <div class="stat-card"><div class="icon">✅</div><h2>{{ items.filter(i=>i.review_status==='approved').length }}</h2><span>已通过</span></div>
+    <div class="stat-card"><div class="icon">📋</div><h2>{{ stats.pending_datasets }}</h2><span>待审核</span></div>
+    <div class="stat-card"><div class="icon">🔍</div><h2>{{ stats.claimed_datasets }}</h2><span>审核中</span></div>
+    <div class="stat-card"><div class="icon">✅</div><h2>{{ stats.approved_datasets }}</h2><span>已通过</span></div>
   </div>
 
   <div class="table-card">
@@ -27,69 +27,32 @@
         </template>
       </el-table-column>
       <el-table-column prop="created_at" label="提交时间" width="120" />
-      <el-table-column label="操作" width="320" align="center">
+      <el-table-column label="操作" width="280" align="center">
         <template #default="{row}">
           <el-button size="small" plain @click="$router.push('/datasets/'+row.dataset_id)">查看详情</el-button>
           <el-button v-if="row.review_status==='submitted'" size="small" type="primary" @click="onClaim(row)">认领</el-button>
-          <el-button v-if="row.review_status==='reviewing'" size="small" type="success" @click="onVerdict(row,'approved')">通过</el-button>
-          <el-button v-if="row.review_status==='reviewing'" size="small" type="danger" @click="onVerdict(row,'rejected')">驳回</el-button>
+          <el-button v-if="row.review_status==='reviewing'" size="small" type="warning" @click="$router.push('/review/datasets/'+row.dataset_id)">审核</el-button>
         </template>
       </el-table-column>
     </el-table>
   </div>
-
-  <el-dialog v-model="detailVisible" title="15项检查清单" width="750px">
-    <p style="color:#64748b;margin-bottom:16px;">正在审核：<strong>{{ currentDataset?.name }}</strong></p>
-    <el-table :data="checklist" size="small">
-      <el-table-column prop="id" label="编号" width="60" />
-      <el-table-column prop="name" label="检查项" width="220" />
-      <el-table-column prop="method" label="方式" width="90" />
-      <el-table-column label="结果" width="200">
-        <template #default="{row}">
-          <el-radio-group v-model="row.result" size="small">
-            <el-radio value="pass">通过</el-radio>
-            <el-radio value="na">不适用</el-radio>
-            <el-radio value="fail">存在问题</el-radio>
-          </el-radio-group>
-        </template>
-      </el-table-column>
-    </el-table>
-    <template #footer>
-      <el-button @click="detailVisible=false">取消</el-button>
-      <el-button type="primary" @click="onSubmitReview">提交审核</el-button>
-    </template>
-  </el-dialog>
 </div></template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/api/request'
 
-const router = useRouter()
 const items = ref([])
 const loading = ref(false)
-const detailVisible = ref(false)
-const currentDataset = ref(null)
+const stats = ref({ pending_datasets: 0, claimed_datasets: 0, approved_datasets: 0 })
 
-const checklist = reactive([
-  {id:'A1',name:'文件格式合法性',method:'系统自动',result:'pass'},
-  {id:'A2',name:'数据完整性',method:'人工判断',result:'pass'},
-  {id:'A3',name:'图片质量',method:'人工判断',result:'pass'},
-  {id:'A4',name:'标注状态标记准确性',method:'人工判断',result:'pass'},
-  {id:'A5',name:'数据去重',method:'系统自动',result:'pass'},
-  {id:'A6',name:'标签合法性',method:'系统自动',result:'pass'},
-  {id:'A7',name:'标注框规范性',method:'系统自动',result:'pass'},
-  {id:'A8',name:'深度值合理性',method:'系统自动',result:'pass'},
-  {id:'A9',name:'元信息完整性',method:'系统自动',result:'pass'},
-  {id:'A10',name:'数据集描述一致性',method:'人工判断',result:'pass'},
-  {id:'A11',name:'命名规范',method:'系统自动',result:'pass'},
-  {id:'A12',name:'数据脱敏',method:'人工判断',result:'pass'},
-  {id:'A13',name:'多模态对齐检查',method:'人工判断',result:'na'},
-  {id:'A14',name:'帧对齐/补齐合理性',method:'人工判断',result:'na'},
-  {id:'A15',name:'标注深度来源标注',method:'人工判断',result:'pass'}
-])
+async function fetchStats() {
+  try {
+    const { data } = await request.get('/review/stats')
+    stats.value = data
+  } catch { /* ignore */ }
+}
 
 async function fetchItems() {
   loading.value = true
@@ -104,37 +67,13 @@ async function onClaim(row) {
   try {
     await request.post(`/review/datasets/${row.dataset_id}/claim`)
     row.review_status = 'reviewing'
-    currentDataset.value = row
-    detailVisible.value = true
-    ElMessage.success('已认领，请逐项检查后提交审核结果')
+    stats.value.pending_datasets = Math.max(0, stats.value.pending_datasets - 1)
+    stats.value.claimed_datasets += 1
+    ElMessage.success('已认领，点击"审核"开始审核')
   } catch (e) { ElMessage.error(e?.response?.data?.detail || '认领失败') }
 }
 
-async function onVerdict(row, verdict) {
-  currentDataset.value = row
-  // 直接提交（跳过清单弹窗）
-  try {
-    await request.post(`/review/datasets/${row.dataset_id}/verdict`, { verdict, notes: {} })
-    row.review_status = verdict
-    ElMessage.success(verdict === 'approved' ? '审核已通过' : '已驳回')
-  } catch (e) { ElMessage.error(e?.response?.data?.detail || '操作失败') }
-}
-
-async function onSubmitReview() {
-  if (!currentDataset.value) return
-  const failItems = checklist.filter(c => c.result === 'fail')
-  const verdict = failItems.length > 0 ? 'rejected' : 'approved'
-  const notes = { checklist: checklist.map(c => ({id:c.id, result:c.result})) }
-  try {
-    await request.post(`/review/datasets/${currentDataset.value.dataset_id}/verdict`, { verdict, notes })
-    const row = items.value.find(i => i.dataset_id === currentDataset.value.dataset_id)
-    if (row) row.review_status = verdict
-    detailVisible.value = false
-    ElMessage.success(verdict === 'approved' ? '审核已通过' : '已驳回，原因已记录')
-  } catch (e) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
-}
-
-onMounted(fetchItems)
+onMounted(() => { fetchStats(); fetchItems() })
 </script>
 
 <style scoped>

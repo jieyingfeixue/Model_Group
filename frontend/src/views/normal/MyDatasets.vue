@@ -74,7 +74,7 @@
             <el-button size="small" plain @click="$router.push('/datasets/' + row.dataset_id)">详情</el-button>
 
             <el-button
-              v-if="row.annotated_count < row.sample_count"
+              v-if="row.annotated_count < row.sample_count && row.review_status !== 'approved'"
               size="small" type="primary" round @click="$router.push('/annotate/' + row.dataset_id)"
             >标注</el-button>
 

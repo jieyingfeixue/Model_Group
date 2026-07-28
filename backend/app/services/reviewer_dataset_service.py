@@ -105,7 +105,7 @@ def submit_dataset_verdict(
     dataset_id: int,
     verdict: str,
     reviewer_id: int,
-    notes: str | None = None,
+    notes: Any = None,
 ) -> dict[str, Any]:
     """审核员提交数据集审核结果。
 

@@ -51,7 +51,7 @@ from scene_tag_utils import (  # noqa: E402
 
 # ─── 默认路径 / 连接 ───
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_CAPTURE = BASE_DIR / "with_cameras_capture_20260427_151113"
+DEFAULT_CAPTURE = Path(r"D:\桌面\with_cameras_capture_20260430_202854")
 SCENE_EXCEL = Path(os.environ.get("SCENE_EXCEL", str(DEFAULT_EXCEL)))
 
 MINIO = Minio("localhost:9000", access_key="minioadmin", secret_key="minioadmin", secure=False)
