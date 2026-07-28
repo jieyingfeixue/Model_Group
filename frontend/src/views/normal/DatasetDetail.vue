@@ -103,7 +103,7 @@
         class="sample-item"
         @click="openSample(s)"
       >
-        <div class="thumb-row">
+        <div class="thumb-row" :class="'n' + displayThumbs(s).length">
           <div
             v-for="img in displayThumbs(s)"
             :key="img.resource_id"
@@ -112,13 +112,6 @@
           >
             <span class="mod-tag">{{ modShort(img.modality, img) }}</span>
             <img :src="img.thumbnail" loading="lazy" @error="onThumbError" />
-          </div>
-          <div
-            v-for="n in Math.max(0, 4 - displayThumbs(s).length)"
-            :key="'empty-'+n"
-            class="mini-thumb empty"
-          >
-            <span>—</span>
           </div>
         </div>
         <div class="sample-meta">
@@ -144,7 +137,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDatasetDetail } from '@/api/dataset'
 import request from '@/api/request'
@@ -153,7 +146,7 @@ const route = useRoute()
 const router = useRouter()
 
 const THUMB_SLOTS = [
-  { modality: 'visible', prefer: 'DA8679037', label: '设备1' },
+  { modality: 'visible', prefer: 'DA8679037', label: '可见光' },
   { modality: 'infrared', prefer: null, label: '红外' },
   { modality: 'mmwave', prefer: null, label: '毫米波' },
   { modality: 'lidar', prefer: null, label: '激光雷达' },
@@ -166,6 +159,7 @@ function modShort(m, img) {
 }
 
 function displayThumbs(sample) {
+  // 有几个模态就展示几张；可见光只放设备1，标签仍为「可见光」；不补空白格
   const images = sample?.images || []
   const used = new Set()
   const result = []
@@ -184,16 +178,7 @@ function displayThumbs(sample) {
     used.add(pick.resource_id)
     result.push({ ...pick, _slotLabel: slot.label })
   }
-  // 若按标准槽位凑不满 4 张，用剩余图补齐（兼容只选部分模态的数据集）
-  if (result.length < 4) {
-    for (const img of images) {
-      if (used.has(img.resource_id)) continue
-      used.add(img.resource_id)
-      result.push(img)
-      if (result.length >= 4) break
-    }
-  }
-  return result.slice(0, 4)
+  return result
 }
 
 function onThumbError(e) {
@@ -201,10 +186,15 @@ function onThumbError(e) {
 }
 
 function openSample(s) {
+  // 带上数据集内该样本的 resource_id，详情页只展示所选模态
+  const ids = (s.images || []).map(i => i.resource_id).filter(Boolean).join(',')
   router.push({
     name: 'SampleDetail',
     params: { id: String(s.group_no ?? s.sample_id) },
-    query: { batch: s.batch_id || undefined },
+    query: {
+      batch: s.batch_id || undefined,
+      ids: ids || undefined,
+    },
   })
 }
 
@@ -225,12 +215,20 @@ const pagedSamples = computed(() => {
   return sampleData.value.slice(start, start + pageSize)
 })
 
-onMounted(async () => {
+async function loadDataset(id) {
+  if (!id) {
+    dataset.value = null
+    sampleData.value = []
+    return
+  }
+  dataset.value = null
+  sampleData.value = []
+  currentPage.value = 1
   try {
-    const { data } = await getDatasetDetail(route.params.id)
+    const { data } = await getDatasetDetail(id)
     dataset.value = data
     try {
-      const res = await request.get(`/datasets/${route.params.id}/items`)
+      const res = await request.get(`/datasets/${id}/items`)
       const samples = res.data?.samples || []
       sampleData.value = samples.map(s => {
         const images = (s.resources || []).map(r => ({
@@ -250,12 +248,14 @@ onMounted(async () => {
           images,
         }
       })
-      currentPage.value = 1
     } catch { /* sample preview optional */ }
   } catch {
     dataset.value = null
   }
-})
+}
+
+// keep-alive 下切换 /datasets/:id 必须监听，否则会一直显示第一次打开的详情
+watch(() => route.params.id, (id) => { loadDataset(id) }, { immediate: true })
 </script>
 
 <style scoped>
@@ -383,7 +383,11 @@ box-shadow:
 0 12px 28px rgba(15,23,42,.12);
 
 }
-.thumb-row{ display:grid; grid-template-columns:1fr 1fr; gap:2px; margin-bottom:8px; background:#e2e8f0; border-radius:8px; overflow:hidden; padding:2px; }
+.thumb-row{ display:grid; gap:2px; margin-bottom:8px; background:#e2e8f0; border-radius:8px; overflow:hidden; padding:2px; }
+.thumb-row.n1{ grid-template-columns:1fr; }
+.thumb-row.n2{ grid-template-columns:1fr 1fr; }
+.thumb-row.n3,
+.thumb-row.n4{ grid-template-columns:1fr 1fr; }
 .mini-thumb{
   position:relative;
   aspect-ratio:1;
@@ -399,7 +403,6 @@ box-shadow:
   background:#0f172a;
 }
 .mini-thumb img{ width:100%; height:100%; object-fit:cover; }
-.mini-thumb.empty{ background:#f1f5f9; color:#cbd5e1; font-size:18px; }
 .mod-tag{
   position:absolute; top:4px; left:4px; z-index:1;
   font-size:10px; padding:1px 6px; border-radius:8px;

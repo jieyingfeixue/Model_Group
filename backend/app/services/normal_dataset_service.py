@@ -179,24 +179,18 @@ def _apply_split(
       - random:   按单个 resource_id 随机打乱后切分
       - grouped:  按 sample_group 分组后整组分配（保持多模态配对不被拆散）
       - 其他:     不 shuffle，按原始顺序切分
-    """
-    train_pct = int(split_config.get("train", 70))
-    val_pct = int(split_config.get("val", 20))
-    test_pct = int(split_config.get("test", 10))
-    strategy = split_config.get("strategy", "random")
 
-    total = train_pct + val_pct + test_pct
-    if total == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="切分比例之和不能为 0",
-        )
+    split_config.mode:
+      - tenths: 十分制自动划分（train/val/test 份数之和为 10）
+      - count:  手动指定 train_count / val_count，其余进 test
+    """
+    strategy = split_config.get("strategy", "random")
 
     # ── grouped 策略：按 sample_group 聚合后整组分配 ──
     if strategy == "grouped":
-        _apply_grouped_split(db, dataset_id, resource_ids, train_pct, val_pct, test_pct, total)
+        _apply_grouped_split(db, dataset_id, resource_ids, split_config)
     else:
-        _apply_flat_split(db, dataset_id, resource_ids, train_pct, val_pct, test_pct, total, strategy)
+        _apply_flat_split(db, dataset_id, resource_ids, split_config, strategy)
 
     # 回写 split_config 到数据集
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
@@ -205,14 +199,71 @@ def _apply_split(
         dataset.save(db)
 
 
+def _resolve_subset_counts(
+    n: int,
+    split_config: dict[str, Any],
+) -> tuple[int, int, int]:
+    """根据切分配置计算 train/val/test 的份数（样本组数或资源数）。
+
+    支持两种 mode:
+      - tenths: 十分制自动划分。train/val/test 为 0~10 的份数且之和为 10；
+                实际数量 = n * parts // 10，余数进 test。
+                兼容旧配置：train/val/test 之和为 100 时按百分制换算。
+      - count:  手动指定 train_count / val_count，其余进 test；
+                三者之和必须等于 n，且均非负。
+    """
+    mode = split_config.get("mode", "tenths")
+
+    if mode == "count":
+        train_n = int(split_config.get("train_count", 0))
+        val_n = int(split_config.get("val_count", 0))
+        if "test_count" in split_config and split_config.get("test_count") is not None:
+            test_n = int(split_config["test_count"])
+        else:
+            test_n = n - train_n - val_n
+        if train_n < 0 or val_n < 0 or test_n < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="子集数量不能为负数",
+            )
+        if train_n + val_n + test_n != n:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"训练集+验证集+测试集必须等于样本总数 {n}，当前为 {train_n + val_n + test_n}",
+            )
+        return train_n, val_n, test_n
+
+    # ── tenths（默认）──
+    train_parts = int(split_config.get("train", 7))
+    val_parts = int(split_config.get("val", 2))
+    test_parts = int(split_config.get("test", 1))
+    parts_total = train_parts + val_parts + test_parts
+    if parts_total == 100:
+        # 兼容旧百分制配置 → 十分制
+        train_parts, val_parts, test_parts = train_parts // 10, val_parts // 10, test_parts // 10
+        parts_total = train_parts + val_parts + test_parts
+    if parts_total != 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="十分制划分要求训练/验证/测试份数之和为 10",
+        )
+    if train_parts < 0 or val_parts < 0 or test_parts < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="子集份数不能为负数",
+        )
+
+    train_n = n * train_parts // 10
+    val_n = n * val_parts // 10
+    test_n = n - train_n - val_n
+    return train_n, val_n, test_n
+
+
 def _apply_grouped_split(
     db: Session,
     dataset_id: int,
     resource_ids: list[int],
-    train_pct: int,
-    val_pct: int,
-    test_pct: int,
-    total_pct: int,
+    split_config: dict[str, Any],
 ) -> None:
     """按 sample_group 分组后整组随机分配到 train/val/test"""
     # 1. 批量查询 sample_group
@@ -242,10 +293,16 @@ def _apply_grouped_split(
     group_ids = list(groups.keys())
     random.shuffle(group_ids)
 
-    # 5. 按组数量比例分配
     n_groups = len(group_ids)
-    train_end = max(1, int(n_groups * train_pct / total_pct))
-    val_end = train_end + max(0, int(n_groups * val_pct / total_pct))
+    if n_groups < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"构建数据集至少需要 10 个样本，当前为 {n_groups}",
+        )
+
+    train_n, val_n, _test_n = _resolve_subset_counts(n_groups, split_config)
+    train_end = train_n
+    val_end = train_n + val_n
 
     items: list[dict[str, Any]] = []
     for i, gid in enumerate(group_ids):
@@ -265,10 +322,7 @@ def _apply_flat_split(
     db: Session,
     dataset_id: int,
     resource_ids: list[int],
-    train_pct: int,
-    val_pct: int,
-    test_pct: int,
-    total_pct: int,
+    split_config: dict[str, Any],
     strategy: str,
 ) -> None:
     """按单个 resource_id 切分（原有逻辑）"""
@@ -277,8 +331,15 @@ def _apply_flat_split(
         random.shuffle(ids)
 
     n = len(ids)
-    train_end = max(1, int(n * train_pct / total_pct))
-    val_end = train_end + max(0, int(n * val_pct / total_pct))
+    if n < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"构建数据集至少需要 10 个样本，当前为 {n}",
+        )
+
+    train_n, val_n, _test_n = _resolve_subset_counts(n, split_config)
+    train_end = train_n
+    val_end = train_n + val_n
 
     items: list[dict[str, Any]] = []
     for i, rid in enumerate(ids):
@@ -391,9 +452,10 @@ def restore_dataset(db: Session, dataset_id: int) -> dict[str, Any]:
 # ──── 提交审核 ────
 
 def submit_for_review(db: Session, dataset_id: int) -> dict[str, Any]:
-    """提交数据集审核（review_status → pending_review）。
+    """提交数据集审核（review_status → submitted）。
 
     创建后即为 frozen；若仍有历史 draft，提交时自动升为 frozen。
+    不要求已完成标注（标注完整度由审核员侧检查）。
     """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if dataset is None:
@@ -407,7 +469,40 @@ def submit_for_review(db: Session, dataset_id: int) -> dict[str, Any]:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="当前状态无法提交公开申请",
         )
-    dataset.review_status = "pending_review"
+    if dataset.review_status in ("submitted", "reviewing"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该数据集已在审核流程中",
+        )
+    # 与 DB CHECK 及审核页一致：not_submitted → submitted
+    dataset.review_status = "submitted"
+    dataset.reviewer_id = None
+    dataset.save(db)
+    return _build_response(db, dataset)
+
+
+def withdraw_from_review(db: Session, dataset_id: int) -> dict[str, Any]:
+    """撤销公开申请（review_status: submitted → not_submitted）。
+
+    仅允许在审核员认领前撤销；reviewing / approved / rejected 不可撤销。
+    """
+    dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="数据集不存在"
+        )
+    if dataset.review_status == "reviewing":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="审核员已认领该申请，无法撤销",
+        )
+    if dataset.review_status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="当前状态无法撤销公开申请",
+        )
+    dataset.review_status = "not_submitted"
+    dataset.reviewer_id = None
     dataset.save(db)
     return _build_response(db, dataset)
 

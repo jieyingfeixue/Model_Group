@@ -118,6 +118,17 @@ async function loadSample() {
     }
     items = items.filter(it => Number(it.meta_info?.sample_group) === sample_group)
 
+    // 从数据集进入时：只展示该数据集收录的 resource（所选模态）
+    const idsRaw = route.query.ids ? String(route.query.ids) : ''
+    if (idsRaw) {
+      const allow = new Set(
+        idsRaw.split(',').map(Number).filter(n => Number.isFinite(n))
+      )
+      if (allow.size) {
+        items = items.filter(it => allow.has(it.resource_id))
+      }
+    }
+
     if (!items.length) {
       loadError.value = `未找到样本 #${sample_group}`
       return
@@ -154,7 +165,7 @@ async function loadSample() {
   }
 }
 
-watch(() => [route.params.id, route.query.batch], loadSample, { immediate: true })
+watch(() => [route.params.id, route.query.batch, route.query.ids], loadSample, { immediate: true })
 
 function openDetail(resourceId) {
   const ids = (sample.value?.images || []).map(i => i.resource_id).join(',')

@@ -15,17 +15,21 @@ class DatasetCreateRequest(BaseModel):
     resource_ids: list[int] = Field(..., min_length=1, description="数据资源 ID 列表")
     split_config: dict[str, Any] | None = Field(
         default=None,
-        description="切分配置，如 {train:70, val:20, test:10, strategy:'random'}"
+        description="切分配置，如 {mode:'tenths', train:7, val:2, test:1, strategy:'grouped'} 或 {mode:'count', train_count:7, val_count:2, test_count:1}"
     )
     visibility: str = Field(default="private", description="可见性: private / public")
 
 
 class DatasetSplitRequest(BaseModel):
     """切分数据集请求"""
-    train: int = Field(default=70, ge=0, le=100)
-    val: int = Field(default=20, ge=0, le=100)
-    test: int = Field(default=10, ge=0, le=100)
-    strategy: str = Field(default="random", description="random / sequential / grouped（按样本组聚合，保持多模态配对）")
+    train: int = Field(default=7, ge=0, le=10, description="十分制：训练集份数")
+    val: int = Field(default=2, ge=0, le=10, description="十分制：验证集份数")
+    test: int = Field(default=1, ge=0, le=10, description="十分制：测试集份数")
+    mode: str = Field(default="tenths", description="tenths（十分制）/ count（按数量）")
+    train_count: int | None = Field(default=None, ge=0, description="手动划分：训练集样本数")
+    val_count: int | None = Field(default=None, ge=0, description="手动划分：验证集样本数")
+    test_count: int | None = Field(default=None, ge=0, description="手动划分：测试集样本数")
+    strategy: str = Field(default="grouped", description="random / sequential / grouped（按样本组聚合，保持多模态配对）")
 
 
 class DatasetPublishRequest(BaseModel):

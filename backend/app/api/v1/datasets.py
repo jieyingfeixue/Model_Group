@@ -120,10 +120,22 @@ def split_dataset(
     db: Session = Depends(get_db),
 ):
     """重新切分数据集（清除旧分配，按新比例随机分配）"""
+    split_config: dict = {
+        "train": body.train,
+        "val": body.val,
+        "test": body.test,
+        "mode": body.mode,
+        "strategy": body.strategy,
+    }
+    if body.mode == "count":
+        split_config["train_count"] = body.train_count if body.train_count is not None else 0
+        split_config["val_count"] = body.val_count if body.val_count is not None else 0
+        if body.test_count is not None:
+            split_config["test_count"] = body.test_count
     result = normal_dataset_service.split_dataset(
         db,
         dataset_id,
-        split_config={"train": body.train, "val": body.val, "test": body.test, "strategy": body.strategy},
+        split_config=split_config,
     )
     return DatasetResponse(**result)
 
@@ -189,8 +201,21 @@ def submit_for_review(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """提交数据集审核（需先冻结）"""
+    """提交数据集审核（需登录；状态变为 submitted）"""
     result = normal_dataset_service.submit_for_review(db, dataset_id)
+    return DatasetResponse(**result)
+
+
+# ──── POST /api/datasets/{dataset_id}/withdraw-review ────
+
+@router.post("/{dataset_id}/withdraw-review", response_model=DatasetResponse)
+def withdraw_from_review(
+    dataset_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """撤销公开申请（需登录；submitted → not_submitted）"""
+    result = normal_dataset_service.withdraw_from_review(db, dataset_id)
     return DatasetResponse(**result)
 
 

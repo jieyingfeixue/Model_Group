@@ -29,9 +29,9 @@ import { computed } from 'vue'
 const props = defineProps({ sample: Object })
 defineEmits(['select'])
 
-// 浏览四宫格：设备1可见光、红外、毫米波、激光雷达（不含设备2）
+// 浏览四宫格标签用模态名；仍优先选设备1可见光，设备名仅在样本详情五图展示
 const BROWSE_SLOTS = [
-  { modality: 'visible', prefer: 'DA8679037', label: '设备1' },
+  { modality: 'visible', prefer: 'DA8679037', label: '可见光' },
   { modality: 'infrared', prefer: null, label: '红外' },
   { modality: 'mmwave', prefer: null, label: '毫米波' },
   { modality: 'lidar', prefer: null, label: '激光雷达' },

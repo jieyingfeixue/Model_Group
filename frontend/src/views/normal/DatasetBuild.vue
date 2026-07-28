@@ -109,17 +109,73 @@
         </div>
       </div>
       <div class="card" v-if="hitCount > 0"><h3>子集划分</h3>
-        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
-          <span>训练集</span><el-input-number v-model="split.train" :min="0" :max="99 - split.val" @change="split.test = 100 - split.train - split.val" style="width:120px;" /> %
-          <span>验证集</span><el-input-number v-model="split.val" :min="1" :max="99 - split.train" @change="split.test = 100 - split.train - split.val" style="width:120px;" /> %
-          <span style="color:#6b7280;">测试集 = 100 - 训练 - 验证 = {{ split.test }}%</span>
+        <p style="margin:0 0 12px;color:#64748b;font-size:13px;">
+          已选 <b style="color:#3b82f6;">{{ selectedIds.size }}</b> 个样本（至少 10 个）
+        </p>
+        <el-radio-group v-model="split.mode" style="margin-bottom:14px;" @change="onSplitModeChange">
+          <el-radio value="tenths">十分制自动划分</el-radio>
+          <el-radio value="count" style="margin-left:16px;">按数量手动划分</el-radio>
+        </el-radio-group>
+
+        <div v-if="split.mode === 'tenths'" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+          <span>训练集</span>
+          <el-input-number
+            v-model="split.train"
+            :min="0"
+            :max="10 - split.val"
+            :step="1"
+            :precision="0"
+            @change="onTenthsChange"
+            style="width:110px;"
+          />
+          <span style="color:#94a3b8;">/10</span>
+          <span>验证集</span>
+          <el-input-number
+            v-model="split.val"
+            :min="0"
+            :max="10 - split.train"
+            :step="1"
+            :precision="0"
+            @change="onTenthsChange"
+            style="width:110px;"
+          />
+          <span style="color:#94a3b8;">/10</span>
+          <span style="color:#6b7280;">测试集 = {{ split.test }}/10</span>
+          <span v-if="selectedIds.size >= 10" style="color:#94a3b8;font-size:12px;width:100%;">
+            预览：训练 {{ tenthsPreview.train }} · 验证 {{ tenthsPreview.val }} · 测试 {{ tenthsPreview.test }}
+          </span>
         </div>
-        <el-radio-group v-model="split.strategy">
-            <el-radio value="random">随机划分</el-radio>
-            <span style="color:#94a3b8;font-size:12px;margin-left:4px;">（所有图片随机打乱后按比例切分，适用于单模态数据集）</span>
-            <el-radio value="grouped" style="margin-left:16px;">按样本分组</el-radio>
-            <span style="color:#94a3b8;font-size:12px;margin-left:4px;">（同一时刻采集的多模态图片作为整体分配到同一子集，适用于多模态数据集）</span>
-          </el-radio-group>
+
+        <div v-else style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+          <span>训练集</span>
+          <el-input-number
+            v-model="split.trainCount"
+            :min="0"
+            :max="Math.max(0, selectedIds.size - split.valCount)"
+            :step="1"
+            :precision="0"
+            @change="onCountChange"
+            style="width:120px;"
+          />
+          <span>个</span>
+          <span>验证集</span>
+          <el-input-number
+            v-model="split.valCount"
+            :min="0"
+            :max="Math.max(0, selectedIds.size - split.trainCount)"
+            :step="1"
+            :precision="0"
+            @change="onCountChange"
+            style="width:120px;"
+          />
+          <span>个</span>
+          <span :style="{ color: countTest < 0 ? '#ef4444' : '#6b7280' }">
+            测试集 = {{ countTest }} 个
+          </span>
+          <span style="color:#94a3b8;font-size:12px;width:100%;">
+            训练 + 验证 + 测试须等于已选样本数 {{ selectedIds.size }}
+          </span>
+        </div>
       </div>
       <div class="card" v-if="hitCount > 0">
 
@@ -235,10 +291,12 @@ function resetAll() {
   sampleCount.value = 20
   datasetId.value = null
   datasetName.value = ''
-  split.train = 70
-  split.val = 20
-  split.test = 10
-  split.strategy = 'random'
+  split.mode = 'tenths'
+  split.train = 7
+  split.val = 2
+  split.test = 1
+  split.trainCount = 0
+  split.valCount = 0
   uploadFiles.value = []
   uploadDone.value = false
   datasetName2.value = ''
@@ -279,13 +337,58 @@ const filters = reactive({
   terrain: '',
   obstacle: '',
 })
-const split = reactive({ train: 70, val: 20, test: 10, strategy: 'random' })
+const split = reactive({
+  mode: 'tenths',
+  train: 7,
+  val: 2,
+  test: 1,
+  trainCount: 0,
+  valCount: 0,
+})
+
+function onTenthsChange() {
+  const t = Math.max(0, Math.min(10, Math.floor(Number(split.train) || 0)))
+  const v = Math.max(0, Math.min(10 - t, Math.floor(Number(split.val) || 0)))
+  split.train = t
+  split.val = v
+  split.test = 10 - t - v
+}
+
+const tenthsPreview = computed(() => {
+  const n = selectedIds.value.size
+  if (n < 10) return { train: 0, val: 0, test: 0 }
+  const train = Math.floor((n * split.train) / 10)
+  const val = Math.floor((n * split.val) / 10)
+  return { train, val, test: n - train - val }
+})
+
+const countTest = computed(() => selectedIds.value.size - (Number(split.trainCount) || 0) - (Number(split.valCount) || 0))
+
+function onCountChange() {
+  const n = selectedIds.value.size
+  let train = Math.max(0, Math.floor(Number(split.trainCount) || 0))
+  let val = Math.max(0, Math.floor(Number(split.valCount) || 0))
+  if (train + val > n) {
+    if (train > n) train = n
+    val = Math.min(val, Math.max(0, n - train))
+  }
+  split.trainCount = train
+  split.valCount = val
+}
+
+function onSplitModeChange(mode) {
+  if (mode === 'count' && selectedIds.value.size >= 10) {
+    const p = tenthsPreview.value
+    split.trainCount = p.train
+    split.valCount = p.val
+  }
+}
 const hitCount = ref(null)
 const datasetName = ref('')
 const datasetId = ref(null)
 const matchedSamples = ref([])
 const samplePage = ref(1)
-const samplePageSize = ref(12)
+const samplePageSize = ref(15)
 const sampleCount = ref(20)
 const selectedIds = ref(new Set())
 
@@ -410,22 +513,52 @@ async function onSearch() {
   }
 }
 async function onCreate(){
-  if (selectedIds.value.size < 1) { ElMessage.warning('请至少选择1个样本'); return }
+  const selectedCount = selectedIds.value.size
+  if (selectedCount < 10) {
+    ElMessage.warning('请至少选择 10 个样本后再创建数据集')
+    return
+  }
+  if (split.mode === 'tenths') {
+    onTenthsChange()
+    if (split.train + split.val + split.test !== 10) {
+      ElMessage.warning('十分制划分要求训练/验证/测试份数之和为 10')
+      return
+    }
+  } else {
+    onCountChange()
+    const test = countTest.value
+    if (split.trainCount < 0 || split.valCount < 0 || test < 0) {
+      ElMessage.warning('子集数量不能为负数')
+      return
+    }
+    if (split.trainCount + split.valCount + test !== selectedCount) {
+      ElMessage.warning(`训练+验证+测试必须等于已选样本数 ${selectedCount}`)
+      return
+    }
+  }
   const selected = matchedSamples.value.filter(s => selectedIds.value.has(s.sample_id))
   // 从选中样本中收集所有 resource_id
   const resourceIds = selected.flatMap(s => s.images.map(img => img.resource_id))
   const n = resourceIds.length
+  const split_config = {
+    mode: split.mode,
+    strategy: 'grouped',
+  }
+  if (split.mode === 'tenths') {
+    split_config.train = split.train
+    split_config.val = split.val
+    split_config.test = split.test
+  } else {
+    split_config.train_count = split.trainCount
+    split_config.val_count = split.valCount
+    split_config.test_count = countTest.value
+  }
   try {
     const { data } = await createDataset({
       name: datasetName.value || '新建数据集',
       description: '',
       resource_ids: resourceIds,
-      split_config: {
-        train: split.train,
-        val: split.val,
-        test: split.test,
-        strategy: split.strategy
-      },
+      split_config,
       visibility: 'private'
     })
     datasetId.value = data.dataset_id

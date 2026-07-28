@@ -55,39 +55,47 @@
   </div>
 
   <div class="table-card">
-    <el-table :data="datasets" style="margin-top:12px;">
-      <el-table-column prop="name" label="数据集名称" />
-      <el-table-column prop="sample_count" label="样本数" width="100" header-align="center" align="center" />
-      <el-table-column prop="annotation_progress" label="标注状态" width="110" header-align="center" align="center">
+    <el-table :data="datasets" style="width:100%;margin-top:12px;">
+      <el-table-column prop="name" label="数据集名称" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="sample_count" label="样本数" min-width="100" header-align="center" align="center" />
+      <el-table-column prop="annotation_progress" label="标注状态" min-width="130" header-align="center" align="center">
         <template #default="{row}">
           <el-tag v-if="row.annotated_count === row.sample_count" type="success" round effect="light" size="small">已完成标注</el-tag>
           <el-tag v-else type="warning" round effect="light" size="small">未完成标注</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="visibility" label="可见范围" width="100" header-align="center" align="center" />
-      <el-table-column prop="created_at" label="创建时间" width="120" header-align="center" align="center" />
-      <el-table-column label="操作" width="320" header-align="center" align="center">
+      <el-table-column prop="visibility" label="可见范围" min-width="110" header-align="center" align="center" />
+      <el-table-column label="创建时间" min-width="160" header-align="center" align="center">
+        <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+      </el-table-column>
+      <el-table-column label="操作" min-width="360" header-align="center" align="center">
         <template #default="{ row }">
+          <div class="ops">
+            <el-button size="small" plain @click="$router.push('/datasets/' + row.dataset_id)">详情</el-button>
 
-          <el-button size="small" plain @click="$router.push('/datasets/' + row.dataset_id)">详情</el-button>
+            <el-button
+              v-if="row.annotated_count < row.sample_count"
+              size="small" type="primary" round @click="$router.push('/annotate/' + row.dataset_id)"
+            >标注</el-button>
 
-          <!-- 标注（未完成标注时显示） -->
-          <el-button
-            v-if="row.annotated_count < row.sample_count"
-            size="small" type="primary" round @click="$router.push('/annotate/' + row.dataset_id)"
-          >标注</el-button>
+            <el-tooltip
+              v-if="row.review_status === 'not_submitted' || row.review_status === 'rejected'"
+              content="提交后将同时进入数据集审核和标注审核，两者均通过后自动发布到数据集市场"
+              placement="top"
+            >
+              <el-button size="small" type="warning" round @click="onSubmitReview(row)">提交公开申请</el-button>
+            </el-tooltip>
 
-          <!-- 提交公开申请（未提交或被驳回时显示） -->
-          <el-tooltip content="提交后将同时进入数据集审核和标注审核，两者均通过后自动发布到数据集市场" placement="top">
-          <el-button
-            v-if="row.review_status === 'not_submitted' || row.review_status === 'rejected'"
-            size="small" type="warning" round @click="onSubmitReview(row)"
-          >提交公开申请</el-button>
-          </el-tooltip>
+            <el-tooltip
+              v-if="row.review_status === 'submitted'"
+              content="撤销后可重新编辑并再次提交；审核员已认领后不可撤销"
+              placement="top"
+            >
+              <el-button size="small" type="info" plain round @click="onWithdrawReview(row)">撤销公开申请</el-button>
+            </el-tooltip>
 
-          <!-- 删除 -->
-          <el-button size="small" type="danger" plain round @click="onDelete(row)">删除</el-button>
-
+            <el-button size="small" type="danger" plain round @click="onDelete(row)">删除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -99,11 +107,19 @@
 <script setup>
 import { ref, reactive, onMounted, onActivated, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getDatasetList, deleteDataset, submitForReview } from '@/api/dataset'
+import { getDatasetList, deleteDataset, submitForReview, withdrawFromReview } from '@/api/dataset'
 
 const filter = reactive({ status: '' })
 const datasets = ref([])
 const loading = ref(false)
+
+function formatTime(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 19).replace('T', ' ')
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 async function fetchDatasets() {
   loading.value = true
@@ -122,9 +138,24 @@ async function fetchDatasets() {
 async function onSubmitReview(row){
   try {
     await submitForReview(row.dataset_id)
-    row.review_status = 'pending_review'
+    row.review_status = 'submitted'
     ElMessage.success('已提交公开申请，等待审核员审批')
   } catch (e) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
+}
+
+async function onWithdrawReview(row){
+  try {
+    await ElMessageBox.confirm(
+      `确定撤销数据集「${row.name}」的公开申请？撤销后可再次提交。`,
+      '撤销公开申请',
+      { confirmButtonText: '撤销', cancelButtonText: '取消', type: 'warning' }
+    )
+    await withdrawFromReview(row.dataset_id)
+    row.review_status = 'not_submitted'
+    ElMessage.success('已撤销公开申请')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.detail || '撤销失败')
+  }
 }
 
 async function onDelete(row){
@@ -220,5 +251,17 @@ h2{ margin-bottom:16px; }
   border-radius:20px;
   box-shadow:
   0 8px 24px rgba(15,23,42,.06);
+}
+
+.ops{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:center;
+  gap:8px;
+}
+
+.ops :deep(.el-button){
+  margin:0;
 }
 </style>

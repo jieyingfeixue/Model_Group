@@ -15,6 +15,7 @@ class DatasetReviewItem(BaseModel):
     name: str
     description: str | None = None
     owner_id: int | None = None
+    owner_name: str | None = None
     review_status: str
     sample_count: int = 0
     created_at: datetime | str | None = None

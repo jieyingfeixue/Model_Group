@@ -11,6 +11,7 @@ export function splitDataset(id, data)     { return request.post(`/datasets/${id
 export function freezeDataset(id)          { return request.post(`/datasets/${id}/freeze`) }
 export function publishDataset(id, data)   { return request.post(`/datasets/${id}/publish`, data) }
 export function submitForReview(id)        { return request.post(`/datasets/${id}/submit-review`) }
+export function withdrawFromReview(id)     { return request.post(`/datasets/${id}/withdraw-review`) }
 export function changeVisibility(id, data) { return request.put(`/datasets/${id}/visibility`, data) }
 export function archiveDataset(id)         { return request.post(`/datasets/${id}/archive`) }
 export function restoreDataset(id)         { return request.post(`/datasets/${id}/restore`) }
