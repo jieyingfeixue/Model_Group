@@ -59,6 +59,7 @@ class DatasetResponse(BaseModel):
     archive_status: str = "active"
     visibility: str = "private"
     review_status: str = "not_submitted"
+    review_notes: dict[str, Any] | None = None
     sample_count: int = 0
     annotated_count: int = 0
     image_count: int = 0

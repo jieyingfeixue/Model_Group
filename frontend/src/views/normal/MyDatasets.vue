@@ -6,7 +6,7 @@
       <h1>📚 我的数据集</h1>
       <p>
         管理个人创建的数据集，
-        支持标注、提交公开申请及版本管理。
+        支持标注和提交公开申请。
       </p>
     </div>
 
@@ -78,13 +78,20 @@
               size="small" type="primary" round @click="$router.push('/annotate/' + row.dataset_id)"
             >标注</el-button>
 
-            <el-tooltip
-              v-if="row.review_status === 'not_submitted' || row.review_status === 'rejected'"
-              content="提交后将同时进入数据集审核和标注审核，两者均通过后自动发布到数据集市场"
-              placement="top"
+            <el-tag v-if="row.review_status === 'rejected'" type="danger" round size="small" style="margin-right:4px">已驳回</el-tag>
+            <el-popover
+              v-if="row.review_status === 'rejected' && row.review_notes"
+              placement="top" :width="300" trigger="click"
             >
-              <el-button size="small" type="warning" round @click="onSubmitReview(row)">提交公开申请</el-button>
-            </el-tooltip>
+              <template #reference>
+                <el-button size="small" link type="danger" style="margin-right:4px">查看原因</el-button>
+              </template>
+              <div style="font-size:13px;line-height:1.6">{{ parseRejectReason(row.review_notes) }}</div>
+            </el-popover>
+            <el-button
+              v-if="row.review_status === 'not_submitted' || row.review_status === 'rejected'"
+              size="small" type="warning" round @click="onSubmitReview(row)"
+            >{{ row.review_status === 'rejected' ? '重新提交' : '提交公开申请' }}</el-button>
 
             <el-tooltip
               v-if="row.review_status === 'submitted'"
@@ -116,9 +123,9 @@ const loading = ref(false)
 function formatTime(v) {
   if (!v) return '—'
   const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return String(v).slice(0, 19).replace('T', ' ')
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10)
   const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 async function fetchDatasets() {
@@ -133,6 +140,14 @@ async function fetchDatasets() {
   } finally {
     loading.value = false
   }
+}
+
+function parseRejectReason(notes) {
+  if (!notes) return '—'
+  try {
+    const inner = typeof notes.notes === 'string' ? JSON.parse(notes.notes) : notes.notes
+    return inner?.reason || inner?.action || notes.verdict || '—'
+  } catch { return notes.verdict || notes.notes || '—' }
 }
 
 async function onSubmitReview(row){

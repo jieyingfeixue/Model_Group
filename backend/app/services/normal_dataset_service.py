@@ -77,6 +77,7 @@ def _build_response(db: Session, dataset: Dataset) -> dict[str, Any]:
         "archive_status": dataset.archive_status,
         "visibility": dataset.visibility,
         "review_status": dataset.review_status,
+        "review_notes": dataset.review_notes,
         "sample_count": sample_count,
         "annotated_count": annotated_count,
         "image_count": sum(DatasetItem.count_by_subset(db, dataset.dataset_id).values()),

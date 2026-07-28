@@ -25,7 +25,6 @@ export const useUserStore = defineStore('user', {
         ],
         reviewer: [
           { path: '/review/datasets', icon: '✅', label: '数据集审核' },
-          { path: '/review/annotations', icon: '🔍', label: '标注审核' },
         ],
         admin: [
           { path: '/admin/users', icon: '👥', label: '用户管理' },

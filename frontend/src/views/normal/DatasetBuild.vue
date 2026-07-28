@@ -90,9 +90,9 @@
             <div v-for="s in matchedSamples.slice((samplePage-1)*samplePageSize, samplePage*samplePageSize)" :key="s.sample_id"
               class="sample-item" :class="{ selected: selectedIds.has(s.sample_id) }"
               @click="toggleSelect(s.sample_id)"
-              @dblclick="$router.push({ name:'SampleDetail', params:{ id: String(s.group_no ?? s.sample_id) }, query:{ batch: s.batch_id || undefined } })">
+              @dblclick="$router.push({ name:'SampleDetail', params:{ id: String(s.group_no ?? s.sample_id) }, query:{ batch: s.batch_id || undefined, modalities: filters.modality?.join(',') || undefined } })">
               <div class="thumb-row">
-                <div v-for="img in s.images.slice(0,4)" :key="img.resource_id" class="mini-thumb" :class="img.modality">
+                <div v-for="img in dedupImages(s.images)" :key="img.resource_id" class="mini-thumb" :class="img.modality">
                   <img :src="img.thumbnail" @error="e=>e.target.style.display='none'" />
                 </div>
               </div>
@@ -186,6 +186,13 @@
     <el-input
       v-model="datasetName"
       placeholder="数据集名称"
+    />
+
+    <el-input
+      v-model="datasetDesc"
+      type="textarea"
+      placeholder="数据集描述（选填）"
+      :rows="3"
     />
 
   </div>
@@ -291,6 +298,7 @@ function resetAll() {
   sampleCount.value = 20
   datasetId.value = null
   datasetName.value = ''
+  datasetDesc.value = ''
   split.mode = 'tenths'
   split.train = 7
   split.val = 2
@@ -319,6 +327,20 @@ function modLabel(m) {
   const map = { visible: '可见光', infrared: '红外', mmwave: '毫米波', lidar: '激光雷达' }
   return map[m] || m
 }
+
+// 缩略图按模态去重（四种模态全选时可见光只展示一张）
+function dedupImages(images) {
+  const seen = {}
+  const result = []
+  for (const img of images) {
+    if (!seen[img.modality]) {
+      seen[img.modality] = true
+      result.push(img)
+    }
+  }
+  return result.slice(0, 4)
+}
+
 const statusText = ref('frozen')
 const statusLabel = computed(() => {
   if (!datasetId.value) return '未创建'
@@ -385,6 +407,7 @@ function onSplitModeChange(mode) {
 }
 const hitCount = ref(null)
 const datasetName = ref('')
+const datasetDesc = ref('')
 const datasetId = ref(null)
 const matchedSamples = ref([])
 const samplePage = ref(1)
@@ -565,7 +588,7 @@ async function onCreate(){
   try {
     const { data } = await createDataset({
       name: datasetName.value || '新建数据集',
-      description: '',
+      description: datasetDesc.value || '',
       resource_ids: resourceIds,
       split_config,
       visibility: 'private'

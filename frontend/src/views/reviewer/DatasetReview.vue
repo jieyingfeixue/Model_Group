@@ -39,7 +39,7 @@
 </div></template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/api/request'
 
@@ -74,6 +74,7 @@ async function onClaim(row) {
 }
 
 onMounted(() => { fetchStats(); fetchItems() })
+onActivated(() => { fetchStats(); fetchItems() })
 </script>
 
 <style scoped>

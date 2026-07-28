@@ -129,6 +129,15 @@ async function loadSample() {
       }
     }
 
+    // 从数据集构建进入时：只展示用户选择的模态
+    const modsRaw = route.query.modalities ? String(route.query.modalities) : ''
+    if (modsRaw) {
+      const mods = new Set(modsRaw.split(',').filter(Boolean))
+      if (mods.size) {
+        items = items.filter(it => mods.has(it.modality))
+      }
+    }
+
     if (!items.length) {
       loadError.value = `未找到样本 #${sample_group}`
       return

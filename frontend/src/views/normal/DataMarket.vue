@@ -31,23 +31,9 @@
           🧩 数据集筛选
         </div>
         <div class="title-sub">
-          按数据来源、模态类型或关键字快速查找平台公开数据集
+          按模态类型或关键字快速查找平台公开数据集
         </div>
       </div>
-      <el-radio-group
-        v-model="marketFilter.type"
-        @change="fetchDatasets"
-      >
-        <el-radio-button value="all">
-          📦 全部
-        </el-radio-button>
-        <el-radio-button value="official">
-          ⭐ 官方
-        </el-radio-button>
-        <el-radio-button value="community">
-          👥 社区
-        </el-radio-button>
-      </el-radio-group>
       <div class="search-row">
         <el-input
           v-model="marketFilter.keyword"
@@ -104,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import DatasetCard from '@/components/common/DatasetCard.vue'
 import PreviewDialog from '@/components/common/PreviewDialog.vue'
@@ -134,8 +120,6 @@ async function fetchDatasets() {
     let items = data.items || data.datasets || []
     // 过滤掉已归档/删除的数据集
     items = items.filter(d => d.archive_status !== 'archived' && d.status !== 'archived')
-    if (marketFilter.type === 'official') items = items.filter(d => d.is_official)
-    if (marketFilter.type === 'community') items = items.filter(d => !d.is_official)
     datasets.value = items
     // 统计模态种类
     const mods = new Set(items.map(d => d.modality).filter(Boolean))
@@ -148,6 +132,7 @@ function openPreview(ds) { previewDataset.value = ds; previewVisible.value = tru
 function onDownload() { ElMessage.info('下载功能将在后端就绪后开放') }
 
 onMounted(fetchDatasets)
+onActivated(fetchDatasets)
 </script>
 
 <style scoped>

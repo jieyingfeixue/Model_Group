@@ -51,6 +51,22 @@
       <strong>{{ dataset.name }}</strong>
       </div>
 
+      <div class="info-item" v-if="dataset.description">
+      <span>描述</span>
+      <strong>{{ dataset.description }}</strong>
+      </div>
+
+      <div class="info-item">
+
+      <span>包含模态</span>
+
+      <span class="modality-tags">
+        <span v-for="m in datasetModalities" :key="m" class="mod-tag-sm" :class="m">{{ modShort(m, {}) }}</span>
+        <span v-if="datasetModalities.length===0" style="color:#94a3b8">—</span>
+      </span>
+
+      </div>
+
       <div class="info-item">
 
       <span>样本数量</span>
@@ -63,7 +79,7 @@
 
       <span>创建时间</span>
 
-      <strong>{{ dataset.created_at }}</strong>
+      <strong>{{ formatTime(dataset.created_at) }}</strong>
 
       </div>
 
@@ -118,11 +134,18 @@
 
       </div>
   </div>
-  <div class="card" v-if="sampleData.length > 0">
-    <h3>包含样本 ({{ sampleData.length }})</h3>
-    <div class="sample-grid">
+  <div class="card">
+    <h3>包含样本</h3>
+    <div class="subset-tabs">
+      <el-radio-group v-model="activeSubset" @change="currentPage=1">
+        <el-radio-button value="train">训练集 ({{ trainCount }})</el-radio-button>
+        <el-radio-button value="val">验证集 ({{ valCount }})</el-radio-button>
+        <el-radio-button value="test">测试集 ({{ testCount }})</el-radio-button>
+      </el-radio-group>
+    </div>
+    <div class="sample-grid" v-if="subsetSamples.length > 0">
       <div
-        v-for="s in pagedSamples"
+        v-for="s in pagedSubsetSamples"
         :key="s.sample_id"
         class="sample-item"
         @click="openSample(s)"
@@ -145,11 +168,12 @@
         </div>
       </div>
     </div>
+    <el-empty v-else-if="activeSubset" description="该子集暂无样本" :image-size="60" />
     <el-pagination
-      v-if="sampleData.length > pageSize"
+      v-if="subsetSamples.length > pageSize"
       background
       layout="prev, pager, next"
-      :total="sampleData.length"
+      :total="subsetSamples.length"
       :page-size="pageSize"
       :current-page="currentPage"
       @current-change="currentPage = $event"
@@ -222,10 +246,22 @@ function openSample(s) {
   })
 }
 
+function formatTime(t) {
+  if (!t) return '—'
+  return new Date(t).toLocaleDateString('zh-CN')
+}
+
 const dataset = ref(null)
-const sampleData = ref([])
+const sampleData = ref([])       // 全部样本（含 subset 信息）
+const activeSubset = ref('train')
 const currentPage = ref(1)
 const pageSize = 10
+
+const datasetModalities = computed(() => {
+  const mods = new Set()
+  sampleData.value.forEach(s => (s.images || []).forEach(img => mods.add(img.modality)))
+  return [...mods]
+})
 
 const annotationRate = computed(() => {
   const total = Number(dataset.value?.sample_count || 0)
@@ -234,9 +270,17 @@ const annotationRate = computed(() => {
   return Math.round((annotated * 100) / total)
 })
 
-const pagedSamples = computed(() => {
+const trainCount = computed(() => sampleData.value.filter(s => s.subset === 'train').length)
+const valCount = computed(() => sampleData.value.filter(s => s.subset === 'val').length)
+const testCount = computed(() => sampleData.value.filter(s => s.subset === 'test').length)
+
+const subsetSamples = computed(() => {
+  if (!activeSubset.value) return sampleData.value
+  return sampleData.value.filter(s => s.subset === activeSubset.value)
+})
+const pagedSubsetSamples = computed(() => {
   const start = (currentPage.value - 1) * pageSize
-  return sampleData.value.slice(start, start + pageSize)
+  return subsetSamples.value.slice(start, start + pageSize)
 })
 
 async function loadDataset(id) {
@@ -254,33 +298,40 @@ async function loadDataset(id) {
     try {
       const res = await request.get(`/datasets/${id}/items`)
       const samples = res.data?.samples || []
-      sampleData.value = samples.map(s => {
-        const images = (s.resources || []).map(r => ({
-          resource_id: r.resource_id,
-          modality: r.modality,
-          name: r.name,
-          sensor: r.sensor || '',
-          thumbnail: `/api/images/${r.resource_id}/thumbnail`,
-          annotation_status: r.annotation_status,
-        }))
-        return {
-          sample_id: s.sample_id || `${s.batch_id || 'unknown'}::${s.sample_group}`,
-          group_no: s.sample_group,
-          batch_id: s.batch_id || '',
-          scene: s.scene || '-',
-          modality_count: new Set(images.map(i => i.modality)).size,
-          images,
-        }
-      }).sort((a, b) => {
-        const na = Number(a.group_no)
-        const nb = Number(b.group_no)
-        if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb
-        return String(a.group_no ?? '').localeCompare(String(b.group_no ?? ''), undefined, { numeric: true })
-      })
+      sampleData.value = mapSamples(samples)
     } catch { /* sample preview optional */ }
   } catch {
     dataset.value = null
   }
+}
+
+function mapSamples(samples) {
+  return samples.map(s => {
+    const images = (s.resources || []).map(r => ({
+      resource_id: r.resource_id,
+      modality: r.modality,
+      name: r.name,
+      sensor: r.sensor || '',
+      thumbnail: `/api/images/${r.resource_id}/thumbnail`,
+      annotation_status: r.annotation_status,
+    }))
+    // subset 在样本级别（后端按 sample_group 分组时已确定）
+    const subset = s.subset || 'train'
+    return {
+      sample_id: s.sample_id || `${s.batch_id || 'unknown'}::${s.sample_group}`,
+      group_no: s.sample_group,
+      batch_id: s.batch_id || '',
+      scene: s.scene || '-',
+      modality_count: new Set(images.map(i => i.modality)).size,
+      images,
+      subset,
+    }
+  }).sort((a, b) => {
+    const na = Number(a.group_no)
+    const nb = Number(b.group_no)
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb
+    return String(a.group_no ?? '').localeCompare(String(b.group_no ?? ''), undefined, { numeric: true })
+  })
 }
 
 // keep-alive 下切换 /datasets/:id 必须监听，否则会一直显示第一次打开的详情
@@ -438,4 +489,11 @@ box-shadow:
   background:rgba(0,0,0,.55); color:#fff;
 }
 .sample-meta{ display:flex; gap:8px; font-size:12px; color:#6b7280; flex-wrap:wrap; }
+.subset-tabs{ margin-bottom:18px; }
+.modality-tags{ display:flex; gap:6px; flex-wrap:wrap; }
+.mod-tag-sm{ padding:2px 10px; border-radius:12px; font-size:12px; color:#fff; font-weight:600; }
+.mod-tag-sm.visible{ background:#3b82f6; }
+.mod-tag-sm.infrared{ background:#ef4444; }
+.mod-tag-sm.mmwave{ background:#7c3aed; }
+.mod-tag-sm.lidar{ background:#0891b2; }
 </style>
