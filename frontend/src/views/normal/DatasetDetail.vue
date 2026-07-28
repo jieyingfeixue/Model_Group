@@ -247,6 +247,11 @@ async function loadDataset(id) {
           modality_count: new Set(images.map(i => i.modality)).size,
           images,
         }
+      }).sort((a, b) => {
+        const na = Number(a.group_no)
+        const nb = Number(b.group_no)
+        if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb
+        return String(a.group_no ?? '').localeCompare(String(b.group_no ?? ''), undefined, { numeric: true })
       })
     } catch { /* sample preview optional */ }
   } catch {

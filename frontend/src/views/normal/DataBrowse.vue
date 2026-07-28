@@ -155,7 +155,16 @@ function buildSampleGroups(rawItems) {
       })
       g.modality_count = new Set(g.images.map(i => i.modality)).size
     })
-  return Object.values(groupMap).map(({ _seenResource, _seenSensor, ...rest }) => rest)
+  return Object.values(groupMap)
+    .map(({ _seenResource, _seenSensor, ...rest }) => rest)
+    .sort((a, b) => {
+      const na = Number(a.group_no)
+      const nb = Number(b.group_no)
+      if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb
+      const g = String(a.group_no ?? '').localeCompare(String(b.group_no ?? ''), undefined, { numeric: true })
+      if (g !== 0) return g
+      return String(a.batch_id || '').localeCompare(String(b.batch_id || ''))
+    })
 }
 
 async function fetchSamples() {

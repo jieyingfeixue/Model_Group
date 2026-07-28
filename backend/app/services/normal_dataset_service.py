@@ -847,4 +847,12 @@ def get_dataset_samples(db: Session, dataset_id: int) -> list[dict[str, Any]]:
             "file_path": file_path,
         })
 
-    return list(groups.values())
+    def _sort_key(item: dict[str, Any]) -> tuple:
+        sg = item.get("sample_group")
+        try:
+            n = int(sg)
+        except (TypeError, ValueError):
+            n = 10**18
+        return (n, str(sg or ""), str(item.get("batch_id") or ""))
+
+    return sorted(groups.values(), key=_sort_key)
