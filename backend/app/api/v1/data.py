@@ -117,8 +117,25 @@ def list_data(
         filters["end_time"] = end_time
 
     items, total = DataResource.search(db, filters=filters, page=page, size=size)
+    from app.utils.external_labels import has_external_annotation
+
+    out_items = []
+    for r in items:
+        payload = DataResourceResponse.model_validate(r)
+        # 仅可见光需要查外部标注索引；其它模态直接返回
+        if (
+            r.modality == "visible"
+            and payload.annotation_status != "annotated"
+            and has_external_annotation(
+                name=r.name,
+                modality=r.modality,
+                meta_info=r.meta_info if isinstance(r.meta_info, dict) else {},
+            )
+        ):
+            payload = payload.model_copy(update={"annotation_status": "annotated"})
+        out_items.append(payload)
     return {
-        "items": [DataResourceResponse.model_validate(r) for r in items],
+        "items": out_items,
         "total": total,
         "page": page,
         "size": size,
@@ -242,11 +259,23 @@ def get_thumbnail(resource_id: int, size: int = 240, db: Session = Depends(get_d
 
 @router.get("/data/{resource_id}", response_model=DataResourceResponse)
 def get_data_detail(resource_id: int, db: Session = Depends(get_db)):
-    """获取数据资源详情"""
+    """获取数据资源详情（可见光尝试挂载外部 LabelMe 标注框）"""
+    from app.utils.external_labels import get_external_bboxes_for_resource
+
     resource = normal_data_service.get_data_detail(db, resource_id)
     if resource is None:
         raise HTTPException(status_code=404, detail="数据资源不存在")
-    return DataResourceResponse.model_validate(resource)
+    payload = DataResourceResponse.model_validate(resource)
+    meta = resource.meta_info if isinstance(resource.meta_info, dict) else {}
+    bboxes = get_external_bboxes_for_resource(
+        name=resource.name,
+        modality=resource.modality,
+        meta_info=meta,
+    )
+    updates: dict = {"bboxes": bboxes}
+    if bboxes and payload.annotation_status != "annotated":
+        updates["annotation_status"] = "annotated"
+    return payload.model_copy(update=updates)
 
 
 @router.get("/data/{resource_id}/versions")

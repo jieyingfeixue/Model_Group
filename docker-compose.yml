@@ -20,6 +20,7 @@ x-backend-env: &backend-env
   MINIO_SECRET_KEY: minioadmin
   MINIO_BUCKET: detection-platform
   MINIO_SECURE: "false"
+  EXTERNAL_LABEL_DIRS: /labels
   TRAIN_EXECUTOR: ${TRAIN_EXECUTOR:-docker}
   TRAIN_IMAGE: detection-train:demo
   TRAIN_JOBS_DIR: /data/train_jobs
@@ -81,6 +82,7 @@ services:
     volumes:
       - ./backend:/app
       - ./data/train_jobs:/data/train_jobs
+      - ./label_with_cameras_capture_20260427_151113:/labels/label_with_cameras_capture_20260427_151113:ro
     restart: unless-stopped
 
   celery-worker:

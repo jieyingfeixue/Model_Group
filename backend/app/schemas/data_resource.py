@@ -79,6 +79,10 @@ class DataResourceResponse(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    bboxes: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="标注框（含外部 LabelMe 匹配结果）；无则为空列表",
+    )
 
     model_config = {"from_attributes": True, "populate_by_name": True}
 

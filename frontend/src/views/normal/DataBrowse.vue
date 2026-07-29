@@ -80,15 +80,17 @@ import { getDataList } from '@/api/data'
 
 const router = useRouter()
 const samples = ref([])
+const allSamples = ref([])
 const total = ref(0)
 const pageSize = ref(12)
 const currentPage = ref(1)
 const filters = ref({})
+const loading = ref(false)
 
 function onFilterChange(val) {
   filters.value = val
   currentPage.value = 1
-  fetchSamples()
+  fetchSamples(true)
 }
 
 async function fetchAllResources(filterParams) {
@@ -167,7 +169,17 @@ function buildSampleGroups(rawItems) {
     })
 }
 
-async function fetchSamples() {
+function applyPage() {
+  const start = (currentPage.value - 1) * pageSize.value
+  samples.value = allSamples.value.slice(start, start + pageSize.value)
+}
+
+async function fetchSamples(force = true) {
+  if (!force && allSamples.value.length) {
+    applyPage()
+    return
+  }
+  loading.value = true
   try {
     const f = filters.value || {}
     const rawItems = await fetchAllResources({
@@ -176,11 +188,13 @@ async function fetchSamples() {
       terrain: f.terrain || undefined,
       obstacle: f.obstacle || undefined,
     })
-    const all = buildSampleGroups(rawItems)
-    total.value = all.length
-    const start = (currentPage.value - 1) * pageSize.value
-    samples.value = all.slice(start, start + pageSize.value)
+    allSamples.value = buildSampleGroups(rawItems)
+    total.value = allSamples.value.length
+    applyPage()
   } catch { /* backend not ready */ }
+  finally {
+    loading.value = false
+  }
 }
 function onSelect(sample) {
   // 避免把 batch_id 放进 path（含特殊字符时路由会解析错，导致总进同一个样本）
@@ -190,8 +204,12 @@ function onSelect(sample) {
     query: { batch: sample.batch_id || undefined },
   })
 }
-function onPageChange(page) { currentPage.value = page; fetchSamples(); window.scrollTo(0, 0) }
-onMounted(fetchSamples)
+function onPageChange(page) {
+  currentPage.value = page
+  applyPage()
+  window.scrollTo(0, 0)
+}
+onMounted(() => fetchSamples(true))
 </script>
 
 <style scoped>

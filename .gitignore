@@ -12,6 +12,10 @@ __pycache__/
 
 # 本地采集原始数据，勿入库
 with_cameras_capture_*/
+label_with_cameras_capture_*/
+
+# 队友独立标注工具（含 .venv / 大模型权重），暂不入库
+Auto-labeling-LH/
 
 # 临时探测/调试产物
 scripts/_probe_*.py

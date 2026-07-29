@@ -70,15 +70,11 @@
             <div class="bbox-header">
 
                 <span class="bbox-cat">
-
-                    {{ categoryName(b.category_id) }}
-
+                    {{ b.category_name || categoryName(b.category_id) }}
                 </span>
 
                 <span class="bbox-depth">
-
-                    {{ b.depth }} m
-
+                    {{ b.depth != null ? `${b.depth} m` : '—' }}
                 </span>
 
             </div>
@@ -140,8 +136,11 @@ function formatDate(d) {
   return new Date(d).toLocaleString('zh-CN')
 }
 function categoryName(id) {
+  if (id == null || id === '') return '未知'
   const found = props.categoryLabels.find(c => c.id === id)
-  return found ? found.name : `类别${id}`
+  if (found) return found.name
+  if (typeof id === 'string') return id
+  return `类别${id}`
 }
 </script>
 

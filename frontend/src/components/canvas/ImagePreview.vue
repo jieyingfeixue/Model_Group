@@ -141,11 +141,14 @@ function draw() {
       ctx.strokeStyle = '#3b82f6'
       ctx.lineWidth = 2 / zoom.value
       ctx.strokeRect(x, y, bw, bh)
-      const catName = props.categoryLabels.find(c => c.id === b.category_id)?.name || ''
-      const label = catName ? `${catName} ${b.depth || ''}m`.trim() : `${b.depth || ''}m`
+      const catName = b.category_name
+        || props.categoryLabels.find(c => c.id === b.category_id)?.name
+        || (typeof b.category_id === 'string' ? b.category_id : '')
+      const depthText = b.depth != null && b.depth !== '' ? `${b.depth}m` : ''
+      const label = [catName, depthText].filter(Boolean).join(' ')
       ctx.fillStyle = '#3b82f6'
       ctx.font = `${Math.max(12, 14 / zoom.value)}px sans-serif`
-      ctx.fillText(label, x, y > 20 ? y - 4 : y + bh + 14)
+      if (label) ctx.fillText(label, x, y > 20 ? y - 4 : y + bh + 14)
     })
   }
   ctx.restore()
