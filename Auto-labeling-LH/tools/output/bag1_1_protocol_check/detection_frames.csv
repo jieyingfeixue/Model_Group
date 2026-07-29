@@ -1,0 +1,4 @@
+﻿ant_frame_index,packet_index,net_send_frame,timestamp_hmsm,ref_longitude_deg,ref_latitude_deg,ref_heading_deg,ref_altitude_m,n_high_voltage,n_powerline_segments,n_isolated_objects,n_dense_regions
+0,56,101505,55729,118.60113525390625,31.9941349029541,134.10000610351562,0.0,0,0,0,0
+1,2529,104045,55732,118.60113525390625,31.9941349029541,133.89999389648438,0.0,0,0,0,0
+2,4723,106585,55736,118.60113525390625,31.9941349029541,133.5,0.0,0,0,0,0

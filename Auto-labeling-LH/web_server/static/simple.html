@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="UTF-8"><title>LH数据集</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;color:#ccc;font:14px system-ui;display:flex;height:100vh}
+#tree{width:300px;overflow:auto;padding:10px;background:#1a1a2e;border-right:1px solid #333}
+#tree div{padding:3px 8px;cursor:pointer}
+#tree div:hover{background:#252540}
+#tree .d{color:#f5c2e7;font-weight:700;margin-top:4px}
+#tree .c{color:#b4befe;padding-left:16px}
+#tree .p{color:#94e2d5;padding-left:28px}
+#tree .s{color:#89b4fa;padding-left:40px;font-size:12px}
+#main{flex:1;display:flex;align-items:center;justify-content:center;color:#666}
+#img{max-width:95%;max-height:95%;display:none}
+.load{color:#f5c2e7}
+</style></head>
+<body>
+<div id="tree"><div class="load">加载中...</div></div>
+<div id="main">← 点击左侧相机查看图片</div>
+<img id="img" src="">
+<script>
+// Tree data will be inlined by server
+var TREE_DATA = __TREE_JSON__;
+var R = '/data1/LHO/nas/LH_Dataset/LH_data_all_sensor';
+var CAMS = {'037':'hikrobot_camera__DA8679037__image_raw','038':'hikrobot_camera__DA8679038__image_raw','IR':'usb_ir__image_raw'};
+
+function render(){
+  var h='';
+  for(var di=0;di<TREE_DATA.length;di++){
+    var dn=TREE_DATA[di];
+    h+='<div class="d" onclick="tg(this)">📅 '+dn.n+' ('+dn.c+')</div>';
+    var dkids=dn.k||[];
+    for(var ci=0;ci<dkids.length;ci++){
+      var cn=dkids[ci];
+      h+='<div class="c" onclick="tg(this)" style="display:none">📂 '+cn.n.substring(0,40)+' ('+cn.c+')</div>';
+      var ckids=cn.k||[];
+      for(var pi=0;pi<ckids.length;pi++){
+        var pn=ckids[pi];
+        h+='<div class="p" onclick="tg(this)" style="display:none">📁 '+pn.n.substring(0,30)+' ('+pn.c+')</div>';
+        var pkids=pn.k||[];
+        for(var si=0;si< pkids.length;si++){
+          var sn=pkids[si];
+          var sp=dn.n+'/'+cn.n+'/'+pn.n+'/'+sn.n;
+          h+='<div class="s" onclick="tg(this)" style="display:none">📄 '+sn.n+' ('+sn.c+')</div>';
+          var skids=sn.k||[];
+          for(var camI=0;camI<skids.length;camI++){
+            var cam=skids[camI];
+            h+='<div style="padding-left:52px;font-size:11px;cursor:pointer;display:none" onclick="loadCam(\''+sp+'\',\''+cam.n+'\')">🖼 '+cam.n+' ('+cam.c+'张)</div>';
+          }
+        }
+      }
+    }
+  }
+  document.getElementById('tree').innerHTML=h;
+}
+
+function tg(el){
+  var parent=el.parentElement||el.parentNode;
+  var next=el.nextElementSibling||el.nextSibling;
+  while(next){
+    if(next.tagName==='DIV'){
+      var cur=next.style.display;
+      next.style.display=(cur==='none'||cur==='')?'block':'none';
+    }else{break;}
+    next=next.nextElementSibling||next.nextSibling;
+  }
+}
+
+function loadCam(sp,ck){
+  document.getElementById('main').innerHTML='加载中...';
+  var camDir=CAMS[ck];
+  var p=sp+'/'+ck;
+  fetch('/api/browse/images?root='+encodeURIComponent(R)+'&path='+encodeURIComponent(p))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var imgs=d.images||[];
+      document.getElementById('main').innerHTML='共 '+imgs.length+' 张';
+      if(imgs.length>0){
+        var ip=sp+'/images/'+camDir+'/'+imgs[0];
+        document.getElementById('img').src='/api/browse/image?root='+encodeURIComponent(R)+'&path='+encodeURIComponent(ip)+'&thumb=0';
+        document.getElementById('img').style.display='block';
+      }
+    })
+    .catch(function(e){document.getElementById('main').innerHTML='错误: '+e.message;});
+}
+
+render();
+</script>
+</body></html>

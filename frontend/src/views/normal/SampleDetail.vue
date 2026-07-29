@@ -2,6 +2,7 @@
 <div class="page">
   <div class="top-bar">
     <el-button text @click="$router.back()">← 返回</el-button>
+    <el-button type="primary" plain size="small" @click="openAnnotateHub">打开标注工具</el-button>
   </div>
   <div v-if="!sample" class="loading">{{ loadError || '加载中...' }}</div>
   <div v-else>
@@ -184,11 +185,15 @@ function openDetail(resourceId) {
     query: ids ? { ids } : {},
   })
 }
+
+function openAnnotateHub() {
+  router.push({ name: 'AnnotationHub' })
+}
 </script>
 
 <style scoped>
 .page{ padding:28px; max-width:1450px; margin:auto; min-height:100vh; }
-.top-bar{ margin-bottom:16px; }
+.top-bar{ margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .hero{ padding:32px 40px; margin-bottom:24px; border-radius:18px;
   background: linear-gradient(135deg, #0f172a, #1e3a8a); color:white;
   box-shadow: 0 10px 30px rgba(30,64,175,.18); }

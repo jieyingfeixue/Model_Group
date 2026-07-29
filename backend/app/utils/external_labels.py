@@ -1,8 +1,11 @@
 """队友外部 LabelMe 标注加载 — 仅用于可见光详情页叠加显示。
 
-标注目录形如 label_with_cameras_capture_*，JSON 放在红外帧文件夹下，
-但 imagePath / group.visible_file 指向可见光图；按可见光文件名匹配。
-匹配不上则返回空列表。
+支持目录：
+  - label_with_cameras_capture_*
+  - label_with_annotation_and_depth（Auto-labeling-LH 默认写出）
+
+JSON 常放在红外帧文件夹下，但 imagePath / group.visible_file 指向可见光图；
+按可见光文件名或时间戳+相机号匹配。匹配不上或 shapes 为空则返回空列表。
 """
 
 from __future__ import annotations
@@ -84,15 +87,27 @@ def _label_roots() -> list[Path]:
     return out
 
 
+def _is_label_dir_name(name: str) -> bool:
+    """识别平台可读的外部 LabelMe 根目录。"""
+    if name.startswith("label_with_cameras_capture_"):
+        return True
+    # Auto-labeling-LH 默认写出目录
+    if name == "label_with_annotation_and_depth" or name.startswith(
+        "label_with_annotation_and_depth"
+    ):
+        return True
+    return False
+
+
 def _discover_label_dirs(roots: list[Path]) -> list[Path]:
     dirs: list[Path] = []
     for root in roots:
-        if root.name.startswith("label_with_cameras_capture_"):
+        if _is_label_dir_name(root.name):
             dirs.append(root)
             continue
         try:
             for child in root.iterdir():
-                if child.is_dir() and child.name.startswith("label_with_cameras_capture_"):
+                if child.is_dir() and _is_label_dir_name(child.name):
                     dirs.append(child)
         except OSError:
             continue

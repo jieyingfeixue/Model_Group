@@ -1,0 +1,131 @@
+# ── 应用全局 ───────────────────────────────────
+app:
+  window_title: "Multi-Sensor 3D Auto-Labeling"
+  theme: dark
+  auto_save: true
+  auto_save_interval_sec: 60
+  undo_history_limit: 50
+
+# ── 数据集 ─────────────────────────────────────
+# 本版本（Auto-labeling-LH）仅面向 LH_2026-04-27 数据集。
+# 服务器部署: 数据在 ~/nas/LH_Dataset/LH_data_all_sensor
+# 本地开发:   L:/LH_data_all_sensor (Windows NAS 映射)
+dataset:
+  root: "/home/gjj202/nas/LH_Dataset/LH_data_all_sensor"
+  default_profile: "lh"
+  scene_id: "1"
+
+# ── 模型推理 ───────────────────────────────────
+remote_storage:
+  enabled: false
+  protocol: "sftp"
+  host: ""
+  port: 22
+  username: ""
+  password_env: "LH_REMOTE_PASSWORD"
+  root: "/homes/LH_Dataset"
+  cache_root: "./temp/remote_dataset_cache"
+
+models:
+  device: "cpu"               # cuda | cpu  (服务器无 GPU 时用 cpu)
+  detector:
+    name: "yolo_pt"           # yolo_pt | yolo_onnx | grounding_dino | none
+    weights_path: "models/yolov8x.pt"
+    classes_path: ""
+    conf_threshold: 0.35
+    nms_threshold: 0.45
+    input_size: 640
+    default_prompt: "car . truck . bus . pedestrian . cyclist"
+  depth:
+    name: "torch_depth"  # lidar_projection | torch_depth | onnx | transformers
+    onnx_path: ""
+    pth_path: "models/depth_anything_v2_vits.pth"
+    model_name: "depth-anything/Depth-Anything-V2-Small"
+    max_depth: 80.0
+    interp_method: "linear"
+  segmentor:
+    name: "auto"               # auto | sam2 | mobile_sam | sam_v1 | stub
+    enabled: true              # toggles SAM mask refinement on box-draw
+    hf_model_id: "facebook/sam2-hiera-large"
+    weights_path: ""           # optional local SAM v1 .pth (vit_h) or mobile_sam.pt
+    device: ""                 # auto-detect cuda/cpu when empty
+
+  # Plan-A v3 box-fitting orchestrator (src/fusion/box_from_2d_v3.py).
+  # Controls the "draw 2D box -> auto fit 3D box" path used in MultiViewAnnotation.
+  fit_quality: "auto"          # fast | full | auto | none
+                               #   fast: MobileSAM (~150ms CPU)
+                               #   full: SAM2-Hiera-L (~3s CPU, best accuracy)
+                               #   auto: full when GPU available else fast
+                               #   none: bbox-only, no SAM, no DA virtual pts
+
+# ── Agent 系统 ─────────────────────────────────
+agent:
+  enabled: true
+  auto_trigger: true
+
+  rule_engine:
+    lidar_min_points: 3
+    lidar_zero_action: "delete"
+    dimension_sigma_threshold: 3.0
+    overlap_iou_threshold: 0.5
+    ground_penetration_threshold: 0.3
+    yaw_deviation_threshold: 30
+
+  llm_agent:
+    provider: "anthropic"
+    model: "claude-sonnet-4-20250514"
+    api_key_env: "ANTHROPIC_API_KEY"
+    max_tool_rounds: 20
+    temperature: 0.1
+    fallback_model: "gpt-4.1"
+
+  vision_agent:
+    provider: "dashscope"
+    model: "qwen-vl-max"
+    endpoint: ""
+    api_key_env: "DASHSCOPE_API_KEY"
+    enabled: true
+    fallback_provider: ""
+
+  decision:
+    auto_apply_threshold: 0.85
+    ask_human_threshold: 0.5
+    max_auto_adjustments_per_frame: 10
+
+# ── 导出 ───────────────────────────────────────
+export:
+  default_format: "lh"        # TODO: 在 src/export/ 下新增 lh_writer.py
+  output_root: "./outputs"
+
+# ── 2D 图像标注叠加 ───────────────────────────────────────────────────────────
+# 在相机图像上叠加 LabelMe 格式的 2D 矩形框（building / signal tower 等）。
+# labelme_root 设为空字符串则禁用；路径可为相对路径（相对于工作目录）或绝对路径。
+annotations:
+  labelme_root: "/home/gjj202/nas/LH_Dataset/LH_data_all_sensor_annotations"
+  autofill_root: "/home/gjj202/nas/LH_Dataset/LH_data_all_sensor_annotations_autofill"
+  depth_root: "/home/gjj202/nas/LH_Dataset/LH_data_all_sensor_annotations_depth"
+  show_by_default: true       # 打开场景后立即显示已有图像标注框
+  offline_depth_only: true    # 切帧只读取预计算深度，不在界面线程实时估算
+  label_colors:               # 各类别颜色（#RRGGBB）
+    building: "#FF8800"
+    signal tower: "#CC44FF"
+    default: "#00FFCC"
+
+# ── OSM 语义自动标注 (per-point: background/building/tower/wind_turbine) ──
+# 由 src/io/semantic_osm.py 在 lh_adapter.load_frame 末尾调用。
+# 4 类标签写入 frame.meta['radar_semantic_labels'] (numpy int32 (N,))。
+# 注意: 不含 railway, 因为 BEV 投影会把铁路上方所有回波误标。
+semantic_osm:
+  # 在线 Overpass 查询不能位于逐帧浏览热路径中。绝对深度地图匹配使用
+  # capture 下的 target_depth_db.json，不依赖这里的逐点语义标注。
+  enabled: false
+  cache_dir: "temp/osm_cache"
+  bbox_pad_m: 2000.0           # 至少 >= 雷达最大量程的一半 (LH=4km 取 2km)
+  building_pad_m: 3.0          # 建筑物多边形外扩 (吸收 GPS/描绘误差 + range bin)
+  tower_radius_base_m: 15.0    # 电塔脚架 ~10m + GPS 误差 + 方位分辨率扩展
+  wind_radius_base_m: 25.0     # 风机叶片 ~40m
+  hdop_gain_m: 8.0             # 自适应: radius += hdop_gain * (hdop-1)
+  hdop_cap_m: 30.0             # 自适应额外半径上限
+  # 高德地图街道瓦片建筑源 (无需 API key, 自动下载高德 style=8 瓦片做颜色分割)
+  # 瓦片缓存到 temp/tile_cache/; 1 小时 TTL; 网络不通时静默跳过
+  gaode_tile_buildings: true

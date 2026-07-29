@@ -1,0 +1,10 @@
+{
+  "_comment": "Per-capture camera heading corrections verified from image/map inspection. Values are added to the default LH camera heading convention (nav100 heading - 90 degrees).",
+  "captures": {
+    "4_29/with_cameras_capture_20260429_165854": {
+      "camera_heading_correction_deg": 180.0,
+      "reason": "Manual image/map verification: camera optical direction is reversed by 180 degrees."
+    }
+  },
+  "segments": {}
+}

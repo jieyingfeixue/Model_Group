@@ -285,7 +285,7 @@ const cards = [
  icon:'🖊️',
  title:'智能标注中心',
  desc:'在线完成目标框、类别、深度信息标注',
- path:'/annotate/1',
+ path:'/annotate',
  needLogin:true
 },
 {

@@ -75,7 +75,7 @@
 
             <el-button
               v-if="row.annotated_count < row.sample_count && row.review_status !== 'approved'"
-              size="small" type="primary" round @click="$router.push('/annotate/' + row.dataset_id)"
+              size="small" type="primary" round @click="$router.push('/annotate')"
             >标注</el-button>
 
             <el-tag v-if="row.review_status === 'rejected'" type="danger" round size="small" style="margin-right:4px">已驳回</el-tag>

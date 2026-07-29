@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>LH 数据标注</title>
+<!-- 高德地图 JS API v2 -->
+<script>
+window._AMapSecurityConfig = {
+  securityJsCode: '8065dfbc45dc4aa8efc9fd0857a2b1b8',
+};
+</script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=5d4b7e89878f121830f82098f7405b14&plugin=AMap.CircleMarker,AMap.TileLayer.Satellite,AMap.Buildings,AMap.Scale"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0f0f1a;color:#cdd6f4;height:100vh;display:flex}
+:root{--bg:#11111b;--bg2:#181825;--s0:#313244;--s1:#45475a;--tx:#cdd6f4;--st:#a6adc8;--dim:#6c7086;--bl:#89b4fa;--gr:#a6e3a1;--rd:#f38ba8;--yl:#f9e2af;--pk:#f5c2e7;--lv:#b4befe;--tl:#94e2d5}
+
+#sb{width:280px;min-width:180px;max-width:600px;background:var(--bg);display:flex;flex-direction:column;border-right:1px solid var(--s0);overflow:hidden;transition:border-color .2s ease;position:relative}
+#sb.collapsed{width:0;min-width:0;max-width:0;border-right-color:transparent}
+#sb.dragging{transition:none}
+#sb-resizer{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;z-index:10;background:transparent}
+#sb-resizer:hover,#sb-resizer.active{background:var(--bl);opacity:.6}
+#sb .h{padding:8px 10px;background:var(--bg2);border-bottom:1px solid var(--s0)}
+#sb .h h1{font-size:13px;color:var(--tx)}#sb .h a{font-size:10px;color:var(--bl);text-decoration:none}
+#tree{flex:1;overflow-y:auto;overflow-x:hidden;padding:2px 0}
+.tt{cursor:pointer;user-select:none;white-space:nowrap;display:flex;align-items:center}
+.tt:hover{background:#1e1e2e}
+.tt .ar{width:12px;font-size:9px;color:var(--dim);flex-shrink:0;transition:transform .15s}
+.tt .ar.op{transform:rotate(90deg)}
+.tt .ic{width:16px;text-align:center;flex-shrink:0}
+.tt .lb{flex:1;overflow:hidden;text-overflow:ellipsis}
+.tt .cn{font-size:9px;color:#585b70;margin-left:4px;flex-shrink:0}
+.tt.date{color:var(--pk);font-weight:700;font-size:12px;padding:2px 8px}
+.tt.capture{color:var(--lv);font-size:11px;padding:2px 18px}
+.tt.part{color:var(--tl);font-size:11px;padding:2px 28px}
+.tt.segment{color:var(--st);font-size:11px;padding:2px 38px}
+.tt.cam{color:var(--bl);font-size:11px;padding:2px 48px}
+.tt.cam.sel{background:#1e1e2e;color:var(--gr);font-weight:700}
+.ch{display:none}.ch.op{display:block}
+
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#tb{padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--s0);font-size:11px;flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#tb a{color:var(--bl);text-decoration:none;font-weight:600}
+#tb .bc{color:var(--st);flex:1;min-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tb button{padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;border:none}
+#tb .nb{background:var(--s0);color:var(--tx)}#tb .nb:hover{background:var(--s1)}
+#tb .ab{background:var(--gr);color:#111;font-weight:700}
+#tb .ab.off{background:var(--rd)}
+
+#panels{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;overflow:hidden;position:relative}
+.panel{display:flex;flex-direction:column;overflow:hidden}
+.panel:nth-child(1){border-right:1px solid var(--s0);border-bottom:1px solid var(--s0)}
+.panel:nth-child(2){border-bottom:1px solid var(--s0)}
+.panel:nth-child(3){border-right:1px solid var(--s0)}
+.panel:nth-child(4){}
+.ph{padding:3px 6px;background:var(--bg2);font-size:10px;font-weight:700;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.ph .bx{font-size:9px;color:var(--yl)}
+.ph .actions{display:flex;align-items:center;gap:4px}
+.ph button{font-size:9px;padding:1px 5px;border-radius:3px;cursor:pointer;background:var(--s0);border:1px solid var(--s1);color:var(--st)}
+.ph button.detail-open{background:var(--bl);border-color:var(--bl);color:#111;font-weight:700}
+.pw{flex:1;position:relative;overflow:hidden;background:#0a0a14}
+.pw img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;transform-origin:0 0;will-change:transform}
+.pw canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;transform-origin:0 0;will-change:transform}
+.zoom-level{position:absolute;right:7px;top:7px;z-index:20;padding:2px 6px;border-radius:10px;background:rgba(17,17,27,.82);border:1px solid var(--s1);color:var(--tx);font-size:9px;pointer-events:none;opacity:0;transition:opacity .15s}
+.pw.zoomed .zoom-level{opacity:1}
+.pf{padding:2px 6px;font-size:9px;color:var(--dim);background:var(--bg2);flex-shrink:0}
+
+#annoSidebar{position:absolute;top:0;right:0;width:0;min-width:0;height:100%;background:#12121d;border-left:0 solid var(--s0);overflow:hidden;opacity:0;transform:translateX(12px);pointer-events:none;z-index:30;transition:width .2s ease,min-width .2s ease,opacity .15s ease,transform .2s ease,border-left-width .2s ease}
+#annoSidebar.open{width:330px;min-width:280px;border-left-width:1px;opacity:1;transform:translateX(0);pointer-events:auto}
+.ash{height:34px;padding:5px 8px;background:var(--bg2);border-bottom:1px solid var(--s0);display:flex;align-items:center;gap:6px}
+.ash b{font-size:11px;color:var(--tx);white-space:nowrap}.ash .meta{flex:1;min-width:0;color:var(--dim);font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ash button{width:22px;height:22px;border:1px solid var(--s1);border-radius:3px;background:var(--s0);color:var(--tx);cursor:pointer}
+#annoList{height:calc(100% - 34px);padding:7px;overflow-y:auto}
+.ann-empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--dim);font-size:11px;line-height:1.7;padding:20px}
+.ann-card{margin-bottom:7px;border:1px solid var(--s0);border-left:3px solid var(--ann-color,var(--bl));border-radius:5px;background:var(--bg2);overflow:hidden;cursor:pointer}
+.ann-card:hover{border-color:var(--bl);border-left-color:var(--ann-color,var(--bl))}.ann-card.selected{box-shadow:0 0 0 1px var(--bl);background:#1e1e2e}
+.ann-title{padding:6px 7px 5px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #29293b}.ann-title .order{color:var(--dim);font-size:9px}.ann-title b{flex:1;color:var(--tx);font-size:11px}
+.ann-info{display:grid;grid-template-columns:74px minmax(0,1fr);gap:3px 6px;padding:6px 7px;font-size:9px;line-height:1.35}.ann-info dt{color:var(--dim)}.ann-info dd{color:var(--st);overflow-wrap:anywhere}.ann-info .accent{color:var(--tl);font-weight:600}
+@media(max-width:1100px){#annoSidebar.open{width:280px;min-width:240px}}
+
+#pbar{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg2);border-top:1px solid var(--s0);font-size:10px;flex-shrink:0}
+#pbar input[type=range]{flex:1;height:3px;appearance:none;background:var(--s0);border-radius:2px;outline:none;cursor:pointer}
+#pbar input[type=range]::-webkit-slider-thumb{width:12px;height:12px;border-radius:50%;background:var(--bl);cursor:pointer;appearance:none}
+#pbar button{font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;background:var(--s0);border:1px solid var(--s1);color:var(--st)}
+#pbar .fps{width:30px;text-align:center;padding:2px;background:var(--s0);border:1px solid var(--s1);border-radius:3px;color:var(--tx);font-size:9px}
+#pbar span{color:var(--st);font-size:10px}
+
+.card-actions{display:flex;gap:4px;padding:6px 7px;border-top:1px solid #29293b}
+.card-actions button{flex:1;height:24px;border:0;border-radius:3px;cursor:pointer;font-size:10px;font-weight:700}
+.card-actions .apply{background:var(--gr);color:#111}
+.card-actions .del{background:var(--rd);color:#111}
+.card-edit{padding:4px 7px;border-top:1px solid #29293b;display:flex;gap:4px;align-items:center}
+.card-edit select{background:var(--s0);border:1px solid var(--s1);border-radius:3px;color:var(--tx);font-size:9px;height:22px;flex:0 0 auto;width:70px}
+.card-edit .depth-wrap{flex:1;display:flex;align-items:center;gap:2px;position:relative}
+.card-edit .depth-wrap input{flex:1;width:0;min-width:30px;height:22px;padding:2px 18px 2px 4px;background:var(--s0);border:1px solid var(--s1);border-radius:3px;color:var(--tx);font-size:9px;box-sizing:border-box}
+.card-edit .depth-wrap .null-btn{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:14px;height:14px;border:0;border-radius:2px;background:var(--rd);color:#111;font-size:8px;cursor:pointer;padding:0;line-height:14px;text-align:center}
+
+.sp{display:flex;align-items:center;justify-content:center;height:100%;color:var(--dim);font-size:13px}
+</style>
+</head>
+<body>
+
+<aside id="sb">
+  <div class="h"><h1>🏷️ LH 标注</h1><a href="/">← 首页</a> | <a href="/browser">浏览</a></div>
+  <div id="tree"><div class="sp">加载目录...</div></div>
+  <div id="sb-resizer"></div>
+</aside>
+
+<main id="main">
+  <div id="tb">
+    <button class="nb" id="sbToggle" type="button" title="收起目录侧边栏" aria-controls="sb" aria-expanded="true" onclick="toggleSidebar()">☰ 目录</button>
+    <button class="nb" id="bookmarkBtn" onclick="toggleBookmark()" title="书签：记录当前帧位置，下次打开自动跳转" style="background:var(--s0);color:var(--tx)">🔖 书签</button>
+    <a href="/">← 首页</a>
+    <span class="bc" id="bc">展开左侧树，点击 IR 相机开始标注</span>
+    <button class="ab off" id="abtn" onclick="toggleAnno()">🎯 标注</button>
+    <button class="nb" id="detbtn" onclick="detectFeatures()">🤖 SAM3+DA3检测 [R]</button>
+    <button class="nb" id="svbtn" onclick="saveAnn()">💾 保存</button>
+    <button class="nb" id="syncbtn" onclick="sync037to038()" title="只标注037，一键同步到038">🔁 037→038</button>
+  </div>
+
+  <div id="panels">
+    <div class="panel"><div class="ph"><span>📷 037 可见光</span><span class="actions"><span class="bx" id="bc037"></span><button onclick="clearBoxes('037')">清框</button><button id="detailBtn037" aria-controls="annoSidebar" aria-expanded="false" onclick="toggleAnnotationSidebar('037')">展开</button></span></div><div class="pw" title="滚动鼠标滚轮缩放"><img id="i037"><canvas id="c037"></canvas><span class="zoom-level" id="z037">100%</span></div><div class="pf" id="f037"></div></div>
+    <div class="panel"><div class="ph"><span>🔴 IR 红外</span><span class="actions"><span class="bx" id="bcIR"></span><button onclick="clearBoxes('IR')">清框</button><button id="detailBtnIR" aria-controls="annoSidebar" aria-expanded="false" onclick="toggleAnnotationSidebar('IR')">展开</button></span></div><div class="pw" title="滚动鼠标滚轮缩放"><img id="iIR"><canvas id="cIR"></canvas><span class="zoom-level" id="zIR">100%</span></div><div class="pf" id="fIR"></div></div>
+    <div class="panel"><div class="ph"><span>📸 038 可见光</span><span class="actions"><span class="bx" id="bc038"></span><button onclick="clearBoxes('038')">清框</button><button id="detailBtn038" aria-controls="annoSidebar" aria-expanded="false" onclick="toggleAnnotationSidebar('038')">展开</button></span></div><div class="pw" title="滚动鼠标滚轮缩放"><img id="i038"><canvas id="c038"></canvas><span class="zoom-level" id="z038">100%</span></div><div class="pf" id="f038"></div></div>
+    <div class="panel"><div class="ph"><span>📡 高德地图</span><span class="actions"><button id="mapTypeBtn" onclick="toggleMapType()" style="font-size:9px;padding:1px 5px;border-radius:3px;cursor:pointer;background:var(--s0);border:1px solid var(--s1);color:var(--st);">🛰 卫星</button></span></div><div class="pw" style="overflow:hidden;position:relative;"><div id="mapContainer" style="width:100%;height:100%;position:absolute;top:0;left:0;"></div><span class="sp" id="radarMsg">等待加载...</span></div><div class="pf" id="fRadar"></div></div>
+    <aside id="annoSidebar" aria-hidden="true">
+      <div class="ash"><b id="annoSidebarTitle">当前图片标注</b><span class="meta" id="annoSidebarMeta"></span><span id="fl" style="font-size:9px;color:var(--dim);margin-left:4px;flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px"></span><button type="button" title="关闭标注侧边栏" aria-label="关闭标注侧边栏" onclick="closeAnnotationSidebar()">×</button></div>
+      <div id="annoList"><div class="ann-empty">运行 SAM3+DA3 后，点击图片上方的“展开”查看标注信息</div></div>
+    </aside>
+  </div>
+
+
+  <div id="pbar">
+    <button id="playBtn" onclick="playToggle()">▶</button>
+    <input type="range" id="pbr" min="0" max="0" value="0" oninput="seekIR(this.value)">
+    <span id="pi">0/0</span>
+    帧/秒:<input class="fps" id="pfps" value="3" onchange="setFPS(this.value)" style="width:32px">
+    <button onclick="navIR(-1)">◀</button>
+    <button onclick="navIR(1)">▶</button>
+  </div>
+</main>
+
+<script>
+var R='/data1/LHO/nas/LH_Dataset/LH_data_all_sensor';
+var CAMS={'037':{d:'hikrobot_camera__DA8679037__image_raw',l:'037 可见光',i:'📷'},'038':{d:'hikrobot_camera__DA8679038__image_raw',l:'038 可见光',i:'📸'},'IR':{d:'usb_ir__image_raw',l:'IR 红外',i:'🔴'}};
+var camSeg='',camKey='IR',matchData=null,currentIRFile='',frameRequestToken=0;
+var annoMode=false,boxes={'037':[],'038':[],'IR':[]};
+var selBox={cam:null,idx:-1},editMode=null,editStart=null,drawing=null;
+var playT=null,playFPS=3;
+var sam3Busy=false;
+var annotationSidebarCam=null;
+var formalAnnotationState={'037':'pending','038':'pending'};
+var imageZoom={
+  '037':{scale:1,x:0,y:0},'038':{scale:1,x:0,y:0},IR:{scale:1,x:0,y:0},Radar:{scale:1,x:0,y:0}
+};
+
+function toggleSidebar(){
+  var sb=document.getElementById('sb'),btn=document.getElementById('sbToggle');
+  var collapsed=sb.classList.toggle('collapsed');
+  btn.setAttribute('aria-expanded',String(!collapsed));
+  btn.title=collapsed?'展开目录侧边栏':'收起目录侧边栏';
+  setTimeout(refreshImageLayouts,210);
+}
+
+// ═══ Bookmark (localStorage) ═══════════════════════════════════════
+var BM_KEY="lh_annotate_bookmark";
+function getBookmark(){try{return JSON.parse(localStorage.getItem(BM_KEY))}catch(e){return null}}
+function clearBookmark(){localStorage.removeItem(BM_KEY);updateBookmarkBtn(false)}
+function updateBookmarkBtn(has){
+  var btn=document.getElementById("bookmarkBtn");
+  if(!btn)return;
+  if(has){btn.textContent="🔖 已书签";btn.style.background="var(--yl)";btn.style.color="#111"}
+  else{btn.textContent="🔖 书签";btn.style.background="var(--s0)";btn.style.color="var(--tx)"}
+}
+function toggleBookmark(){
+  var bm=getBookmark();
+  if(bm&&bm.seg_path===camSeg&&bm.ir_index===(camIdx.IR||0)){
+    clearBookmark();return
+  }
+  var nb={seg_path:camSeg,ir_index:camIdx.IR||0,ir_file:currentIRFile,label:(new Date()).toLocaleString("zh-CN")};
+  localStorage.setItem(BM_KEY,JSON.stringify(nb));updateBookmarkBtn(true)
+}
+// ── Sidebar drag-resize ──────────────────────────────────────────────
+(function(){var sb=document.getElementById('sb'),rz=document.getElementById('sb-resizer');
+var startX,startW;function onDown(e){e.preventDefault();startX=e.clientX;startW=sb.offsetWidth;
+sb.classList.add('dragging');rz.classList.add('active');
+document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);}
+function onMove(e){var w=startW+(e.clientX-startX);w=Math.max(180,Math.min(600,w));sb.style.width=w+'px';}
+function onUp(){sb.classList.remove('dragging');rz.classList.remove('active');
+document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);
+setTimeout(refreshImageLayouts,60);}
+rz.addEventListener('mousedown',onDown);})();
+// refreshImageLayouts 定义在文件末尾(含地图resize)
+function applyImageZoom(ck){
+  var state=imageZoom[ck],img=document.getElementById('i'+ck);if(!state||!img)return;
+  var pw=img.parentElement,w=pw.clientWidth||0,h=pw.clientHeight||0;
+  state.x=Math.min(0,Math.max(w*(1-state.scale),state.x));
+  state.y=Math.min(0,Math.max(h*(1-state.scale),state.y));
+  var transform='translate('+state.x.toFixed(2)+'px,'+state.y.toFixed(2)+'px) scale('+state.scale.toFixed(4)+')';
+  img.style.transform=transform;
+  var canvas=document.getElementById('c'+ck);if(canvas)canvas.style.transform=transform;
+  pw.classList.toggle('zoomed',state.scale>1.001);
+  var level=document.getElementById('z'+ck);if(level)level.textContent=Math.round(state.scale*100)+'%';
+}
+function zoomImageAt(ck,e){
+  var state=imageZoom[ck],img=document.getElementById('i'+ck);if(!state||!img||!img.getAttribute('src'))return;
+  e.preventDefault();
+  var pw=img.parentElement,rect=pw.getBoundingClientRect(),px=e.clientX-rect.left,py=e.clientY-rect.top;
+  var oldScale=state.scale,factor=Math.exp(-e.deltaY*.0015),newScale=Math.max(1,Math.min(8,oldScale*factor));
+  state.x=px-(px-state.x)*(newScale/oldScale);state.y=py-(py-state.y)*(newScale/oldScale);state.scale=newScale;
+  if(newScale<=1.001){state.scale=1;state.x=0;state.y=0;}
+  applyImageZoom(ck);
+}
+function resetImageZoom(ck){
+  var state=imageZoom[ck];if(!state)return;
+  state.scale=1;state.x=0;state.y=0;applyImageZoom(ck);
+}
+function setupImageZoom(ck){
+  var img=document.getElementById('i'+ck),pw=img&&img.parentElement;if(!pw||pw._zoomReady)return;
+  pw._zoomReady=true;pw.addEventListener('wheel',function(e){zoomImageAt(ck,e);},{passive:false});
+}
+function canvasEventPoint(canvas,e){
+  var rect=canvas.getBoundingClientRect();
+  return{x:(e.clientX-rect.left)*canvas.width/rect.width,y:(e.clientY-rect.top)*canvas.height/rect.height};
+}
+var CLASS_COLORS={
+  power_transmission_tower:'#f38ba8',wind_turbine:'#89b4fa',building:'#a6e3a1',
+  chimney:'#fab387',bridge:'#f9e2af',television_tower:'#cba6f7',signal_tower:'#94e2d5'
+};
+var CLASS_INFO={
+  power_transmission_tower:{zh:'高压线塔',en:'Power tower'},wind_turbine:{zh:'风力发电机',en:'Wind turbine'},
+  building:{zh:'楼房',en:'Building'},chimney:{zh:'烟囱',en:'Chimney'},bridge:{zh:'大桥',en:'Bridge'},
+  television_tower:{zh:'电视塔',en:'Television tower'},signal_tower:{zh:'信号塔',en:'Signal tower'}
+};
+
+function annotationCoords(b){
+  if(b.image_bbox&&b.image_bbox.length===4)return b.image_bbox.map(Number);
+  if([b.x1,b.y1,b.x2,b.y2].every(function(v){return Number.isFinite(Number(v));}))return[b.x1,b.y1,b.x2,b.y2].map(Number);
+  return null;
+}
+function annotationNumber(value,digits){
+  if(value==null||value===''||!Number.isFinite(Number(value)))return'—';
+  return Number(value).toFixed(digits);
+}
+function annotationRow(label,value,accent){
+  return'<dt>'+esc(String(label))+'</dt><dd'+(accent?' class="accent"':'')+'>'+esc(String(value==null||value===''?'—':value))+'</dd>';
+}
+function sortedAnnotations(ck){
+  return(boxes[ck]||[]).map(function(box,index){
+    var coords=annotationCoords(box),centerX=coords?(coords[0]+coords[2])/2:Number.POSITIVE_INFINITY;
+    return{box:box,index:index,coords:coords,centerX:centerX};
+  }).sort(function(a,b){return a.centerX-b.centerX||a.index-b.index;});
+}
+function annotationImageFile(ck){
+  if(ck==='IR')return currentIRFile||'';
+  return matchData&&matchData[ck]&&matchData[ck].file||'';
+}
+function updateAnnotationSidebarButtons(){
+  var sidebar=document.getElementById('annoSidebar'),open=sidebar.classList.contains('open');
+  ['037','038','IR'].forEach(function(ck){
+    var btn=document.getElementById('detailBtn'+ck),active=open&&annotationSidebarCam===ck;
+    btn.textContent=active?'收起':'展开';btn.setAttribute('aria-expanded',String(active));btn.classList.toggle('detail-open',active);
+  });
+}
+function toggleAnnotationSidebar(ck){
+  var sidebar=document.getElementById('annoSidebar');
+  if(sidebar.classList.contains('open')&&annotationSidebarCam===ck){closeAnnotationSidebar();return;}
+  annotationSidebarCam=ck;sidebar.classList.add('open');sidebar.setAttribute('aria-hidden','false');
+  updateAnnotationSidebarButtons();renderAnnotationSidebar();
+  setTimeout(refreshImageLayouts,210);
+}
+function closeAnnotationSidebar(){
+  var sidebar=document.getElementById('annoSidebar');
+  sidebar.classList.remove('open');sidebar.setAttribute('aria-hidden','true');annotationSidebarCam=null;
+  updateAnnotationSidebarButtons();
+  setTimeout(refreshImageLayouts,210);
+}
+function selectAnnotationFromSidebar(ck,index){
+  if(!boxes[ck]||!boxes[ck][index])return;
+  showInspector(ck,index);
+}
+function renderAnnotationSidebar(){
+  var sidebar=document.getElementById('annoSidebar');
+  if(!sidebar.classList.contains('open')||!annotationSidebarCam)return;
+  var ck=annotationSidebarCam,items=sortedAnnotations(ck),file=annotationImageFile(ck);
+  document.getElementById('annoSidebarTitle').textContent=(CAMS[ck]&&CAMS[ck].l||ck)+'标注';
+  document.getElementById('annoSidebarMeta').textContent=(file?file+' · ':'')+items.length+' 个目标 · 左→右';
+  if(!items.length){
+    document.getElementById('annoList').innerHTML='<div class="ann-empty">当前图片暂无标注<br>请进入标注模式手动画框</div>';return;
+  }
+  var html='';items.forEach(function(item,order){
+    var b2=item.box,coords=item.coords,info=CLASS_INFO[b2.class]||{},label=b2.label||info.zh||b2.class||'目标';
+    var color=CLASS_COLORS[b2.class]||'#89b4fa',selected=selBox.cam===ck&&selBox.idx===item.index;
+    var bbox=coords?coords.map(function(v){return annotationNumber(v,1);}).join(', '):'—';
+    var da3Depth=b2.relative_depth_normalized==null?b2.relative_depth:b2.relative_depth_normalized;
+    html+='<article class="ann-card'+(selected?' selected':'')+'" style="--ann-color:'+color+'" onclick="selectAnnotationFromSidebar(\''+ck+'\','+item.index+')">';
+    html+='<div class="ann-title"><span class="order">#'+(order+1)+'</span><b>'+esc(String(label))+'</b></div><dl class="ann-info">';
+    html+=annotationRow('标注物提示词',b2.prompt||label,true)+annotationRow('边框位置',bbox);
+    html+=annotationRow('DA3 相对深度',annotationNumber(da3Depth,6),true)+annotationRow('深度 (m)',annotationNumber(b2.depth_m,3),true)+'</dl>';
+    // Editable fields when selected (only for 037/038)
+    if(selected&&(ck==='037'||ck==='038')){
+      var curClass=b2.class||'building';
+      var opts='';for(var k in CLASS_INFO){opts+='<option value="'+k+'" '+(curClass===k?'selected':'')+'>'+CLASS_INFO[k].zh+'</option>';}
+      html+='<div class="card-edit" onclick="event.stopPropagation()">'+
+        '<select id="aclass_'+ck+'_'+item.index+'">'+opts+'</select>'+
+        '<span class="depth-wrap">'+
+        '<input id="adepth_'+ck+'_'+item.index+'" type="number" step="0.01" placeholder="深度m" value="'+(b2.depth_m==null?'':b2.depth_m)+'">'+
+        '<button class="null-btn" title="清除深度" onclick="event.stopPropagation();document.getElementById(\'adepth_'+ck+'_'+item.index+'\').value=\'\'">×</button>'+
+        '</span>'+
+        '</div>';
+      html+='<div class="card-actions" onclick="event.stopPropagation()">'+
+        '<button class="apply" onclick="event.stopPropagation();applyCardEdit(\''+ck+'\','+item.index+')">💾 保存</button>'+
+        '<button class="del" onclick="event.stopPropagation();deleteCard(\''+ck+'\','+item.index+')">🗑 删除</button>'+
+        '</div>';
+    }
+    html+='</article>';
+  });
+  document.getElementById('annoList').innerHTML=html;
+}
+/*TREE_DATA_PLACEHOLDER*/
+
+function api(u,o){
+  if(!o)o={};if(!o.headers)o.headers={};
+  if(o.body&&typeof o.body=='object'){o.body=JSON.stringify(o.body);o.headers['Content-Type']='application/json';}
+  return fetch(u,o).then(function(r){return r.json().catch(function(){return{};}).then(function(d){if(!r.ok)throw Error(d.detail||r.status);return d;});});
+}
+
+function resizeCanvas(ck){
+  var c=document.getElementById('c'+ck);if(!c)return;
+  var w=Math.max(1,Math.round(c.clientWidth)),h=Math.max(1,Math.round(c.clientHeight));
+  if(c.width!==w||c.height!==h){
+    c.width=w;c.height=h;
+    (boxes[ck]||[]).forEach(function(b){if(b.image_bbox)positionBoxFromImage(ck,b);});
+    redraw(ck);
+  }
+}
+function imageViewport(ck,iw,ih){
+  var c=document.getElementById('c'+ck);if(!c||!iw||!ih)return null;
+  var scale=Math.min(c.width/iw,c.height/ih);
+  return{scale:scale,ox:(c.width-iw*scale)/2,oy:(c.height-ih*scale)/2};
+}
+function positionBoxFromImage(ck,b){
+  if(!b.image_bbox)return false;
+  var iw=b.image_width||1920,ih=b.image_height||1200;
+  var v=imageViewport(ck,iw,ih);if(!v)return false;
+  b.x1=v.ox+b.image_bbox[0]*v.scale;b.y1=v.oy+b.image_bbox[1]*v.scale;
+  b.x2=v.ox+b.image_bbox[2]*v.scale;b.y2=v.oy+b.image_bbox[3]*v.scale;return true;
+}
+function canvasBoxToImage(ck,b){
+  var img=document.getElementById('i'+ck),iw=b.image_width||img.naturalWidth||1920,ih=b.image_height||img.naturalHeight||1200;
+  var v=imageViewport(ck,iw,ih);if(!v)return null;
+  var clamp=function(n,lo,hi){return Math.max(lo,Math.min(n,hi));};
+  b.image_width=iw;b.image_height=ih;
+  b.image_bbox=[clamp((b.x1-v.ox)/v.scale,0,iw),clamp((b.y1-v.oy)/v.scale,0,ih),clamp((b.x2-v.ox)/v.scale,0,iw),clamp((b.y2-v.oy)/v.scale,0,ih)];
+  return b.image_bbox;
+}
+function samBoxToCanvas(ck,b){
+  var img=document.getElementById('i'+ck);
+  resizeCanvas(ck);
+  var iw=b.image_width||img.naturalWidth,ih=b.image_height||img.naturalHeight;
+  if(!iw||!ih)return null;
+  var mapped={class:b.class_id,label:b.label_zh||b.class_name,score:b.score,prompt:b.prompt||'',
+    depth_m:b.depth_m==null?null:b.depth_m,depth_method:b.depth_method||'not_computed',
+    depth_confidence:b.depth_confidence||0,depth_support_points:b.depth_support_points||0,
+    relative_depth:b.relative_depth==null?null:b.relative_depth,
+    relative_depth_normalized:b.relative_depth_normalized==null?null:b.relative_depth_normalized,
+    relative_depth_confidence:b.relative_depth_confidence==null?null:b.relative_depth_confidence,
+    relative_depth_confidence_raw:b.relative_depth_confidence_raw==null?null:b.relative_depth_confidence_raw,
+    relative_depth_support_pixels:b.relative_depth_support_pixels||0,
+    relative_depth_method:b.relative_depth_method||'not_computed',
+    description:b.description||'',image_bbox:[b.x1,b.y1,b.x2,b.y2],image_width:iw,image_height:ih};
+  return positionBoxFromImage(ck,mapped)?mapped:null;
+}
+
+// ═══ Tree ═══════════════════════════════════════════════════════
+function renderTree(data){
+  var h='';
+  for(var di=0;di<data.length;di++){var dn=data[di];
+    h+='<div class="tt date" onclick="tg(this)" title="'+esc(dn.n)+'"><span class="ar">▶</span><span class="ic">📅</span><span class="lb">'+esc(dn.n)+'</span><span class="cn">'+dn.c+'</span></div><div class="ch">';
+    for(var ci=0;ci<(dn.k||[]).length;ci++){var cn=dn.k[ci];
+      h+='<div class="tt capture" onclick="tg(this)" title="'+esc(cn.n)+'"><span class="ar">▶</span><span class="ic">📂</span><span class="lb">'+sh(cn.n,25)+'</span><span class="cn">'+cn.c+'</span></div><div class="ch">';
+      for(var pi=0;pi<(cn.k||[]).length;pi++){var pn=cn.k[pi];
+        h+='<div class="tt part" onclick="tg(this)" title="'+esc(pn.n)+'"><span class="ar">▶</span><span class="ic">📁</span><span class="lb">'+sh(pn.n,18)+'</span><span class="cn">'+pn.c+'</span></div><div class="ch">';
+        for(var si=0;si<(pn.k||[]).length;si++){var sn=pn.k[si];var sp=dn.n+'/'+cn.n+'/'+pn.n+'/'+sn.n;
+          h+='<div class="tt segment" onclick="tg(this)" title="'+esc(sp)+'"><span class="ar">▶</span><span class="ic">📄</span><span class="lb">'+sn.n+'</span><span class="cn">'+(sn.c==null?'':sn.c)+'</span></div><div class="ch">';
+          for(var camI=0;camI<(sn.k||[]).length;camI++){var cam=sn.k[camI];var ci2=CAMS[cam.n]||{i:'🖼',l:cam.n};
+            h+='<div class="tt cam" onclick="event.stopPropagation();selCam(\''+esc(sp)+'\',\''+cam.n+'\')" title="'+esc(ci2.l)+' ('+(cam.c||0)+'张) — '+esc(sp)+'"><span class="ic">'+ci2.i+'</span><span class="lb">'+ci2.l+'</span><span class="cn">'+(cam.c==null?'':cam.c+'张')+'</span></div>';}
+          h+='</div>';}h+='</div>';}h+='</div>';}h+='</div>';}
+  document.getElementById('tree').innerHTML=h;
+}
+function tg(el){el.querySelector('.ar').classList.toggle('op');var n=el.nextElementSibling;if(n)n.classList.toggle('op');}
+
+// ═══ Per-camera state ═══════════════════════════════════════════
+var camImgs={};  // Only IR is a navigable timeline.
+var camIdx={};   // Only camIdx.IR may be changed.
+
+function selCam(sp,ck){
+  document.querySelectorAll('.tt.cam').forEach(function(e){e.classList.remove('sel');});
+  if(camSeg!==sp){camImgs={};camIdx={};currentIRFile='';frameRequestToken++;}
+  camSeg=sp;camKey='IR';
+  var el=event.target;while(el&&!el.classList.contains('tt'))el=el.parentElement;
+  if(el)el.classList.add('sel');
+  var p=el.parentElement;while(p&&p.id!=='sb'){if(p.classList.contains('ch'))p.classList.add('op');var pr=p.previousElementSibling;if(pr){var a=pr.querySelector('.ar');if(a)a.classList.add('op');}p=p.parentElement;}
+  if(ck!=='IR')document.getElementById('bc').textContent='可见光由 IR 时间戳自动匹配，已切换到 IR 时间轴';
+  if(!camImgs.IR) loadCam('IR');
+  else{
+    showCam('IR');
+    var bm=getBookmark();
+    updateBookmarkBtn(bm&&bm.seg_path===camSeg);
+  }
+}
+
+function loadCam(ck){
+  if(ck!=='IR')return;
+  var requestedSeg=camSeg;
+  document.getElementById('bc').textContent='加载 '+ck+'...';
+  api('/api/browse/images?root='+encodeURIComponent(R)+'&path='+encodeURIComponent(requestedSeg)+'/IR')
+    .then(function(d){if(camSeg!==requestedSeg)return;camImgs.IR=d.images||[];camIdx.IR=0;var bm=getBookmark();if(bm&&bm.seg_path===camSeg&&bm.ir_index<camImgs.IR.length){camIdx.IR=bm.ir_index;updateBookmarkBtn(true)}else{updateBookmarkBtn(false)}showCam('IR');})
+    .catch(function(e){if(camSeg===requestedSeg)document.getElementById('bc').textContent='加载失败';});
+}
+
+function showCam(ck){
+  if(ck!=='IR')return;
+  var imgs=camImgs.IR||[],idx=camIdx.IR||0;
+  if(!imgs.length)return;
+  var fn=imgs[idx],dir=CAMS.IR.d,ip=camSeg+'/images/'+dir+'/'+fn;
+  if(fn!==currentIRFile){
+    currentIRFile=fn;matchData=null;boxes={'037':[],'038':[],'IR':[]};
+    formalAnnotationState={'037':'pending','038':'pending'};
+    selBox={cam:null,idx:-1};editMode=null;editStart=null;drawing=null;
+    ['037','038','IR','Radar'].forEach(resetImageZoom);
+    hideInspector();
+    redrawAll();updateBoxCounts();
+  }
+  var token=++frameRequestToken;
+  document.getElementById('iIR').src='/api/browse/image?root='+encodeURIComponent(R)+'&path='+encodeURIComponent(ip);
+  document.getElementById('i037').removeAttribute('src');
+  document.getElementById('i038').removeAttribute('src');
+  document.getElementById('fIR').textContent=fn+' | ts='+fmtTs(fn);
+  document.getElementById('f037').textContent='按 IR 时间戳匹配中...';
+  document.getElementById('f038').textContent='按 IR 时间戳匹配中...';
+  document.getElementById('bc').textContent=camSeg.split('/').pop()+' [IR] '+(idx+1)+'/'+imgs.length;
+  document.getElementById('pbr').max=imgs.length-1;document.getElementById('pbr').value=idx;
+  document.getElementById('pi').textContent=(idx+1)+'/'+imgs.length;
+
+  // IR is the sole timeline. Visible images can only come from this match.
+  api('/api/browse/match?root='+encodeURIComponent(R)+'&seg_path='+encodeURIComponent(camSeg)+'&ir_file='+encodeURIComponent(fn))
+    .then(function(md){if(token!==frameRequestToken||fn!==currentIRFile)return;matchData=md;
+      if(md['037']){document.getElementById('i037').src='/api/browse/image?root='+encodeURIComponent(R)+'&path='+encodeURIComponent(camSeg+'/images/'+CAMS['037'].d+'/'+md['037'].file);document.getElementById('f037').textContent=md['037'].file+' | Δt='+md['037'].diff.toFixed(3)+'s';}
+      else document.getElementById('f037').textContent='无时间戳匹配';
+      if(md['038']){document.getElementById('i038').src='/api/browse/image?root='+encodeURIComponent(R)+'&path='+encodeURIComponent(camSeg+'/images/'+CAMS['038'].d+'/'+md['038'].file);document.getElementById('f038').textContent=md['038'].file+' | Δt='+md['038'].diff.toFixed(3)+'s';}
+      else document.getElementById('f038').textContent='无时间戳匹配';
+      renderAnnotationSidebar();loadRadar(md);loadFrameAnnotations(md,token,fn);if(md.ir)loadAnn(md.ir.ts,token);
+    }).catch(function(e){if(token===frameRequestToken)document.getElementById('bc').textContent='可见光匹配失败';});
+  loadCSV();
+}
+
+// Navigation controls are hard-wired to the IR timeline.
+function navIR(d){var imgs=camImgs.IR||[];if(!imgs.length)return;camIdx.IR=((camIdx.IR||0)+d+imgs.length)%imgs.length;showCam('IR');if(playT)preloadNearby();}
+function seekIR(v){if(!camImgs.IR||!camImgs.IR.length)return;camIdx.IR=parseInt(v);showCam('IR');}
+
+// ═══ AMap (高德地图) ═══════════════════════════════
+var amapObj = null;           // 高德地图实例
+var amapMarkers = [];         // 雷达检测点标记
+var amapDroneMarker = null;   // 无人机当前位置十字
+var amapDronePathLine = null; // 无人机轨迹线
+var amapCamFov = null;       // 相机拍摄角度锥形
+var currentMapType = 'satellite'; // 当前地图类型
+
+function loadRadar(md){
+  var container=document.getElementById('mapContainer'),msg=document.getElementById('radarMsg');
+  if(!md||!md['037']){
+    if(container)container.style.display='none';
+    if(msg){msg.style.display='block';msg.textContent='等待匹配...';}
+    document.getElementById('fRadar').textContent='';return;
+  }
+  if(typeof AMap==='undefined'){
+    if(msg){msg.style.display='block';msg.textContent='高德API未加载(Key未配置?)';}return;
+  }
+  msg.style.display='block';msg.textContent='加载地图数据...';
+  var url='/api/browse/lidar_bev_data?seg_path='+encodeURIComponent(camSeg)+'&frame_id='+encodeURIComponent(md['037'].file);
+  fetch(url).then(function(r){return r.json();}).then(function(data){
+    msg.style.display='none';
+    if(!data.gps){
+      msg.style.display='block';msg.textContent=data.error||'无GPS数据';
+      document.getElementById('fRadar').textContent='';return;
+    }
+    var center=[data.gps.lon,data.gps.lat];
+    container.style.display='block';
+    if(!amapObj){
+      // 首次创建高德地图 — 卫星底图 + 3D楼块
+      amapObj=new AMap.Map('mapContainer',{
+        center:center,zoom:14,viewMode:'3D',pitch:30,rotation:-35,
+        showIndoorMap:false,
+        layers:[
+          new AMap.TileLayer.Satellite(),
+          new AMap.Buildings({zooms:[14,19],zIndex:10,heightFactor:1.5}),
+        ],
+      });
+      // 地图尺寸自适应 + 比例尺
+      setTimeout(function(){if(amapObj){amapObj.resize();amapObj.addControl(new AMap.Scale({position:'LB'}));}},150);
+    }else{
+      amapObj.setCenter(center);
+      amapObj.setZoom(14);
+      amapObj.setPitch(30);
+      amapObj.setRotation(-35);
+    }
+
+    // ── 无人机轨迹路线 (虚线) ─────────────────────────────────
+    if(amapDronePathLine){amapObj.remove(amapDronePathLine);}
+    if(data.drone_path&&data.drone_path.length>=2){
+      var pathPts=data.drone_path.map(function(p){return[p[1],p[0]];}); // [lon,lat]
+      amapDronePathLine=new AMap.Polyline({
+        path:pathPts,strokeColor:'#f38ba8',strokeWeight:2,
+        strokeOpacity:0.6,strokeStyle:'dashed',zIndex:5,
+      });
+      amapObj.add(amapDronePathLine);
+    }
+
+    // ── 无人机当前位置 (十字) ──────────────────────────────────
+    if(amapDroneMarker){amapObj.remove(amapDroneMarker);}
+    amapDroneMarker=new AMap.Marker({
+      position:center,
+      offset:new AMap.Pixel(-14,-14),
+      zIndex:20,
+      content:'<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;">'+
+        '<div style="width:18px;height:18px;border:3px solid #f38ba8;background:transparent;transform:rotate(45deg);box-shadow:0 0 8px rgba(243,139,168,0.6);"></div>'+
+        '</div>',
+    });
+    amapObj.add(amapDroneMarker);
+
+    // ── 相机拍摄角度锥形 ────────────────────────────────────
+    if(amapCamFov){amapObj.remove(amapCamFov);}
+    if(data.gps&&data.gps.heading!=null){
+      var hdg=data.gps.camera_heading||((data.gps.heading-90+360)%360); // camera body heading (GPS-90°)
+      var hfov=9;               // camera HFOV ~8.7° (fx=12585, 1920px telephoto)
+      var coneLen=1000;         // cone length in meters (covers detection range)
+      var centerPos=center;
+      // Compute two edge points of the FOV cone
+      var radHdg=hdg*Math.PI/180;
+      var radLeft=(hdg-hfov/2)*Math.PI/180;
+      var radRight=(hdg+hfov/2)*Math.PI/180;
+      // Meters → lat/lon deltas at current GPS
+      var cosLat=Math.cos(center[1]*Math.PI/180);
+      var dLat=coneLen/111320;
+      var dLon=coneLen/(111320*cosLat);
+      var mid=[center[0]+dLon*Math.sin(radHdg),center[1]+dLat*Math.cos(radHdg)];
+      var left=[center[0]+dLon*Math.sin(radLeft),center[1]+dLat*Math.cos(radLeft)];
+      var right=[center[0]+dLon*Math.sin(radRight),center[1]+dLat*Math.cos(radRight)];
+      amapCamFov=new AMap.Polygon({
+        path:[centerPos,left,mid,right],
+        fillColor:'#f38ba8',fillOpacity:0.15,
+        strokeColor:'#f38ba8',strokeWeight:1,strokeOpacity:0.4,
+        zIndex:8,
+      });
+      amapObj.add(amapCamFov);
+    }
+
+    // ── 更新雷达检测点 ───────────────────────────────────────
+    if(amapMarkers.length){amapObj.remove(amapMarkers);amapMarkers=[];}
+    var sigs=data.detections.map(function(d){return d.signal_db;});
+    var sigLo=sigs.length>1?amapPercentile(sigs,10):80;
+    var sigHi=sigs.length>1?amapPercentile(sigs,90):Math.max.apply(null,sigs);
+    var sigSpan=Math.max(sigHi-sigLo,1);
+    data.detections.forEach(function(d){
+      var sigNorm=Math.max(0,Math.min(1,(d.signal_db-sigLo)/sigSpan));
+      var r=Math.round(sigNorm*255);
+      var g=Math.round((1-Math.abs(sigNorm-0.5)*2)*255);
+      var b=Math.round((1-sigNorm)*128);
+      var color='rgb('+r+','+g+','+b+')';
+      var hitSize=20, dotSize=Math.max(2,Math.min(6,4+d.signal_db/60));
+      var marker=new AMap.Marker({
+        position:[d.lon,d.lat],
+        zIndex:10,
+        extData:{range:d.range_m||0,signal:d.signal_db||0,lon:d.lon,lat:d.lat},
+        offset:new AMap.Pixel(-hitSize/2,-hitSize/2),
+        content:'<div style="width:'+hitSize+'px;height:'+hitSize+'px;display:flex;align-items:center;justify-content:center;cursor:pointer">'+
+          '<div style="width:'+dotSize+'px;height:'+dotSize+'px;border-radius:50%;background:'+color+';opacity:0.7"></div></div>',
+      });
+      marker.on('click',function(e){
+        var d2=e.target.getExtData();
+        // Haversine distance from drone GPS to this detection point
+        var R=6371000; var dLat=(d2.lat-center[1])*Math.PI/180;
+        var dLon=(d2.lon-center[0])*Math.PI/180;
+        var a=Math.sin(dLat/2)**2+Math.cos(center[1]*Math.PI/180)*Math.cos(d2.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+        var dist=Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+        var info='<div style="color:#cdd6f4;font-size:12px;background:#1e1e2e;padding:6px 10px;border-radius:4px;">'+
+          '📡 雷达检测点<br>距无人机: <b>'+dist+' m</b>'+
+          (d2.signal?'<br>信号: '+d2.signal.toFixed(0)+' dB':'')+
+          '</div>';
+        var infoWin=new AMap.InfoWindow({content:info,offset:new AMap.Pixel(-5,-30),closeWhenClickMap:true});
+        infoWin.open(amapObj,[d2.lon,d2.lat]);
+      });
+      amapMarkers.push(marker);
+    });
+    amapObj.add(amapMarkers);
+    var info='📡 '+data.detections.length+'个检测点';
+    if(data.drone_path)info+=' | '+data.drone_path.length+'个GPS航点';
+    document.getElementById('fRadar').textContent=info;
+  }).catch(function(err){
+    msg.style.display='block';msg.textContent='地图数据加载失败';
+    console.error('AMap data error:',err);
+  });
+}
+
+function amapPercentile(arr,p){
+  var sorted=arr.slice().sort(function(a,b){return a-b;});
+  var idx=Math.ceil(p/100*sorted.length)-1;
+  return sorted[Math.max(0,Math.min(idx,sorted.length-1))];
+}
+
+function toggleMapType(){
+  if(!amapObj)return;
+  if(currentMapType==='satellite'){
+    amapObj.setLayers([
+      new AMap.TileLayer(),
+      new AMap.Buildings({zooms:[14,19],zIndex:10,heightFactor:1.5}),
+    ]);
+    currentMapType='street';
+    document.getElementById('mapTypeBtn').textContent='🛰 卫星';
+  }else{
+    amapObj.setLayers([
+      new AMap.TileLayer.Satellite(),
+      new AMap.Buildings({zooms:[14,19],zIndex:10,heightFactor:1.5}),
+    ]);
+    currentMapType='satellite';
+    document.getElementById('mapTypeBtn').textContent='🏙 街道';
+  }
+}
+
+// 监听面板尺寸变化，通知地图重新适配
+function refreshImageLayouts(){
+  ['037','038','IR'].forEach(resizeCanvas);
+  ['037','038','IR','Radar'].forEach(applyImageZoom);
+  if(amapObj)setTimeout(function(){amapObj.resize();},50);
+}
+
+// ═══ Play ═══════════════════════════════════════════════════════
+function playToggle(){
+  if(playT){clearInterval(playT);playT=null;document.getElementById('playBtn').textContent='▶';return;}
+  if(!camImgs.IR||!camImgs.IR.length)return;
+  document.getElementById('playBtn').textContent='⏸';
+  preloadNearby();
+  playT=setInterval(function(){
+    if(camIdx.IR+1>=camImgs.IR.length-1){clearInterval(playT);playT=null;document.getElementById('playBtn').textContent='▶';return;}
+    navIR(1);
+  },1000/playFPS);
+}
+function setFPS(v){playFPS=Math.max(1,Math.min(30,parseInt(v)||3));document.getElementById('pfps').value=playFPS;if(playT){clearInterval(playT);playT=setInterval(function(){if(camIdx.IR+1>=camImgs.IR.length-1){clearInterval(playT);playT=null;document.getElementById('playBtn').textContent='▶';return;}navIR(1);},1000/playFPS);}}
+function preloadNearby(){
+  if(!camImgs.IR||!camSeg)return;
+  var imgs=camImgs.IR,idx=camIdx.IR||0,n=imgs.length;
+  // Pre-load 5 frames ahead into browser cache via Image objects
+  for(var i=1;i<=5;i++){
+    var fi=(idx+i)%n;if(fi===idx)break;
+    (function(fn){
+      var img=new Image();
+      img.src='/api/browse/image?root='+encodeURIComponent(R)+'&path='+encodeURIComponent(camSeg+'/images/'+CAMS.IR.d+'/'+imgs[fn]);
+    })(fi);
+  }
+}
+
+// ═══ Annotation ═════════════════════════════════════════════════
+function toggleAnno(){annoMode=!annoMode;var btn=document.getElementById('abtn');
+  if(annoMode){btn.textContent='🎯 标注中';btn.classList.remove('off');['037','038','IR'].forEach(function(k){setupCanvas(k);});redrawAll();updateBoxCounts();}
+  else{btn.textContent='🎯 标注';btn.classList.add('off');hideInspector();redrawAll();updateBoxCounts();}}
+var pendingBox=null; // {x1,y1} for click→click annotation (deprecated, kept for compatibility)
+function setupCanvas(ck){
+  var c=document.getElementById('c'+ck);
+  c.oncontextmenu=function(e){e.preventDefault();hideInspector();drawing=null;pendingBox=null;editMode=null;selBox={cam:null,idx:-1};redraw(ck);};
+  c.onmousedown=function(e){
+    if(e.button===2||!annoMode)return;
+    var pt=canvasEventPoint(c,e),mx=pt.x,my=pt.y;
+    // Resize handle on selected box
+    if(selBox.cam===ck){var h=hitHandle(ck,mx,my);if(h){editMode='resize_'+h;editStart={x:mx,y:my,box:cloneBox(boxes[ck][selBox.idx])};return;}}
+    // Click on existing box → select
+    var idx=hitBox(ck,mx,my);if(idx>=0){selBox={cam:ck,idx:idx};redraw(ck);updateBoxCounts();showInspector(ck,idx);return;}
+    // Empty area → start drawing (Windows click-drag-release)
+    selBox={cam:null,idx:-1};hideInspector();pendingBox={x1:mx,y1:my};drawing={x1:mx,y1:my,x2:mx,y2:my};redraw(ck);
+  };
+  c.onmousemove=function(e){
+    if(!annoMode)return;var pt=canvasEventPoint(c,e),mx=pt.x,my=pt.y;
+    if(editMode&&editStart){
+      var b=boxes[ck][selBox.idx];var dx=mx-editStart.x,dy=my-editStart.y;
+      if(editMode=='move'){b.x1=editStart.box.x1+dx;b.y1=editStart.box.y1+dy;b.x2=editStart.box.x2+dx;b.y2=editStart.box.y2+dy;}
+      else if(editMode=='resize_tl'){b.x1=editStart.box.x1+dx;b.y1=editStart.box.y1+dy;}
+      else if(editMode=='resize_tr'){b.x2=editStart.box.x2+dx;b.y1=editStart.box.y1+dy;}
+      else if(editMode=='resize_bl'){b.x1=editStart.box.x1+dx;b.y2=editStart.box.y2+dy;}
+      else if(editMode=='resize_br'){b.x2=editStart.box.x2+dx;b.y2=editStart.box.y2+dy;}
+      redraw(ck);return;
+    }
+    if(!drawing||!pendingBox)return;drawing.x2=mx;drawing.y2=my;redraw(ck);
+  };
+  c.onmouseup=function(){
+    if(!annoMode)return;
+    // Finish resize
+    if(editMode&&selBox.cam===ck&&selBox.idx>=0&&boxes[ck]&&boxes[ck][selBox.idx]){
+      canvasBoxToImage(ck,boxes[ck][selBox.idx]);editMode=null;editStart=null;redraw(ck);updateBoxCounts();showInspector(ck,selBox.idx);return;
+    }
+    // Finish drawing (Windows click-drag-release)
+    if(drawing&&pendingBox){
+      var x1=Math.min(drawing.x1,drawing.x2),y1=Math.min(drawing.y1,drawing.y2);
+      var x2=Math.max(drawing.x1,drawing.x2),y2=Math.max(drawing.y1,drawing.y2);
+      drawing=null;
+      if(x2-x1>5&&y2-y1>5){
+        var added={x1:x1,y1:y1,x2:x2,y2:y2,class:'building',label:'楼房',score:0,prompt:'manual',depth_m:null,depth_method:'not_computed',depth_confidence:0,relative_depth:null,relative_depth_normalized:null,relative_depth_confidence:null,relative_depth_method:'not_computed',description:''};
+        canvasBoxToImage(ck,added);boxes[ck].push(added);selBox={cam:ck,idx:boxes[ck].length-1};showInspector(ck,selBox.idx);
+      }
+      pendingBox=null;redraw(ck);updateBoxCounts();return;
+    }
+  };
+}
+function hitBox(ck,mx,my){var bl=boxes[ck]||[];for(var i=bl.length-1;i>=0;i--){var b=bl[i];if(mx>=b.x1&&mx<=b.x2&&my>=b.y1&&my<=b.y2)return i;}return-1;}
+function hitHandle(ck,mx,my){var bl=boxes[ck]||[];if(selBox.cam!==ck||selBox.idx<0||selBox.idx>=bl.length)return null;var b=bl[selBox.idx],h=6;var hs={tl:[b.x1,b.y1],tr:[b.x2,b.y1],bl:[b.x1,b.y2],br:[b.x2,b.y2]};for(var k in hs){if(mx>=hs[k][0]-h&&mx<=hs[k][0]+h&&my>=hs[k][1]-h&&my<=hs[k][1]+h)return k;}return null;}
+function cloneBox(b){return{x1:b.x1,y1:b.y1,x2:b.x2,y2:b.y2,class:b.class};}
+function redraw(ck){
+  var c=document.getElementById('c'+ck),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);
+  var bl=boxes[ck]||[];for(var i=0;i<bl.length;i++){var b=bl[i],isSel=(selBox.cam===ck&&selBox.idx===i);
+    var color=CLASS_COLORS[b.class]||'#a6e3a1';ctx.strokeStyle=isSel?'#ff8c00':color;ctx.lineWidth=isSel?3:2;ctx.strokeRect(b.x1,b.y1,b.x2-b.x1,b.y2-b.y1);
+    ctx.fillStyle=isSel?'rgba(255,140,0,.20)':'rgba(166,227,161,.10)';ctx.fillRect(b.x1,b.y1,b.x2-b.x1,b.y2-b.y1);
+    var label=(b.label||b.class||'目标')+(typeof b.score==='number'?' '+b.score.toFixed(2):'');
+    if(b.relative_depth_normalized!=null&&Number.isFinite(Number(b.relative_depth_normalized)))label+=' · DA3 '+Number(b.relative_depth_normalized).toFixed(3);
+    ctx.font='10px system-ui';var tw=ctx.measureText(label).width+6;
+    ctx.fillStyle=color;ctx.fillRect(b.x1,Math.max(0,b.y1-14),tw,13);
+    ctx.fillStyle='#11111b';ctx.fillText(label,b.x1+3,Math.max(10,b.y1-4));
+    if(isSel){var hs=4;[[b.x1,b.y1],[b.x2,b.y1],[b.x1,b.y2],[b.x2,b.y2]].forEach(function(p){ctx.fillStyle='#89b4fa';ctx.fillRect(p[0]-hs,p[1]-hs,hs*2,hs*2);ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(p[0]-hs,p[1]-hs,hs*2,hs*2);});}
+  }
+  if(drawing){ctx.strokeStyle='#89b4fa';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.strokeRect(Math.min(drawing.x1,drawing.x2),Math.min(drawing.y1,drawing.y2),Math.abs(drawing.x2-drawing.x1),Math.abs(drawing.y2-drawing.y1));ctx.setLineDash([]);}
+}
+function redrawAll(){redraw('037');redraw('038');redraw('IR');}
+function clearBoxes(ck){boxes[ck]=[];if(selBox.cam===ck)hideInspector();redraw(ck);updateBoxCounts();}
+function updateBoxCounts(){['037','038','IR'].forEach(function(k){
+  var el=document.getElementById('bc'+k);if(!el)return;var count=(boxes[k]||[]).length,text=count?count+'框':'';
+  if(k!=='IR'&&formalAnnotationState[k]==='found')text=count+'框 · JSON';
+  if(k!=='IR'&&formalAnnotationState[k]==='invalid')text='JSON不匹配';
+  el.textContent=text;
+});renderAnnotationSidebar();}
+
+// ═══ Selected annotation inspector ═════════════════════════════
+function selectedAnnotation(){
+  if(!selBox.cam||selBox.idx<0||!boxes[selBox.cam]||selBox.idx>=boxes[selBox.cam].length)return null;
+  return{cam:selBox.cam,idx:selBox.idx,box:boxes[selBox.cam][selBox.idx]};
+}
+function showInspector(ck,idx){
+  if(!boxes[ck]||idx<0||idx>=boxes[ck].length)return;
+  selBox={cam:ck,idx:idx};redrawAll();
+  // Open annotation sidebar for this camera and scroll to the card
+  annotationSidebarCam=ck;var sb=document.getElementById('annoSidebar');
+  sb.classList.add('open');sb.setAttribute('aria-hidden','false');
+  var el=document.getElementById('detailBtn'+ck);
+  if(el){el.textContent='收起';el.setAttribute('aria-expanded','true');el.classList.add('detail-open');}
+  renderAnnotationSidebar();
+  // Scroll to the selected card
+  setTimeout(function(){
+    var cards=document.querySelectorAll('#annoList .ann-card');
+    if(cards[idx])cards[idx].scrollIntoView({block:'nearest',behavior:'smooth'});
+  },50);
+  updateAnnotationSidebarButtons();
+}
+function hideInspector(){
+  selBox={cam:null,idx:-1};redrawAll();renderAnnotationSidebar();
+}
+function getCardClassValue(ck,idx){
+  var el=document.getElementById('aclass_'+ck+'_'+idx);
+  return el?el.value:'building';
+}
+function getCardDepthValue(ck,idx){
+  var el=document.getElementById('adepth_'+ck+'_'+idx);
+  return el?el.value.trim():'';
+}
+function applyCardEdit(ck,idx){
+  var status=document.getElementById('fl'),b=boxes[ck]&&boxes[ck][idx];
+  if(!b||(ck!=='037'&&ck!=='038')){status.textContent='仅037/038可见光标注可保存';return;}
+  b.class=getCardClassValue(ck,idx)||'building';
+  var ci=CLASS_INFO[b.class]||CLASS_INFO.building;b.label=ci.zh;
+  var dt=getCardDepthValue(ck,idx);b.depth_m=dt===''?null:parseFloat(dt);
+  if(b.depth_m!==null&&(!Number.isFinite(b.depth_m)||b.depth_m<0)){status.textContent='深度必须为空或非负数';return;}
+  b.depth_method=b.depth_m===null?'not_computed':'manual';
+  if(!b.image_bbox)canvasBoxToImage(ck,b);
+  if(ck==='037'||ck==='038'){
+    redraw(ck);updateBoxCounts();status.textContent='正在保存...';
+    saveFeatureAnnotations(ck).then(function(){status.textContent='✅ 已保存';renderAnnotationSidebar();setTimeout(function(){status.textContent='';},1500);}).catch(function(e){status.textContent='保存失败: '+e.message;});
+  }
+}
+function deleteCard(ck,idx){
+  var status=document.getElementById('fl');
+  if(ck!=='037'&&ck!=='038'){status.textContent='仅037/038可见光标注可删除';return;}
+  boxes[ck].splice(idx,1);
+  selBox={cam:null,idx:-1};
+  redraw(ck);updateBoxCounts();status.textContent='正在删除并保存...';
+  saveFeatureAnnotations(ck).then(function(){status.textContent='✅ 已删除';renderAnnotationSidebar();setTimeout(function(){status.textContent='';},1500);}).catch(function(e){status.textContent='删除保存失败: '+e.message;});
+}
+function serializeFeatureAnnotations(ck){
+  return(boxes[ck]||[]).map(function(b){
+    if(!b.image_bbox)canvasBoxToImage(ck,b);
+    return{class_id:CLASS_INFO[b.class]?b.class:'building',bbox_xyxy:b.image_bbox,
+      sam3_score:Number(b.score)||0,sam3_prompt:b.prompt||'',depth_m:b.depth_m==null?null:Number(b.depth_m),
+      depth_method:b.depth_method||'not_computed',depth_confidence:Number(b.depth_confidence)||0,
+      depth_support_points:Number(b.depth_support_points)||0,
+      relative_depth:b.relative_depth==null?null:Number(b.relative_depth),
+      relative_depth_normalized:b.relative_depth_normalized==null?null:Number(b.relative_depth_normalized),
+      relative_depth_confidence:b.relative_depth_confidence==null?null:Number(b.relative_depth_confidence),
+      relative_depth_confidence_raw:b.relative_depth_confidence_raw==null?null:Number(b.relative_depth_confidence_raw),
+      relative_depth_support_pixels:Number(b.relative_depth_support_pixels)||0,
+      relative_depth_method:b.relative_depth_method||'not_computed',description:b.description||''};
+  }).filter(function(item){return item.bbox_xyxy&&item.bbox_xyxy.length===4;});
+}
+function saveFeatureAnnotations(ck){
+  if((ck!=='037'&&ck!=='038')||!matchData||!matchData.ir||!matchData[ck])return Promise.reject(Error('当前图像信息不完整'));
+  return api('/api/browse/update_feature_annotations',{method:'POST',body:{root:R,seg_path:camSeg,
+    ir_file:matchData.ir.file,camera:ck,image_file:matchData[ck].file,annotations:serializeFeatureAnnotations(ck)}});
+}
+
+// ═══ SAM3 ═══════════════════════════════════════════════════════
+function detectFeatures(){
+  var btn=document.getElementById('detbtn'),status=document.getElementById('fl');
+  if(sam3Busy)return;
+  if(!matchData||!matchData.ir||!matchData['037']||!matchData['038']){
+    status.textContent='请先等待当前红外帧完成双目匹配';return;
+  }
+  if(playT){clearInterval(playT);playT=null;}
+  if(!annoMode){annoMode=true;document.getElementById('abtn').textContent='🎯 标注中';document.getElementById('abtn').classList.remove('off');['037','038','IR'].forEach(setupCanvas);}
+  var requestedIR=matchData.ir.file;
+  sam3Busy=true;btn.textContent='🔄 SAM3+DA3联合推理中...';btn.disabled=true;status.textContent='首次运行需要加载两个模型，请稍候';
+  api('/api/browse/detect_features',{method:'POST',body:{
+    root:R,seg_path:camSeg,ir_file:requestedIR,
+    visible_files:{'037':matchData['037'].file,'038':matchData['038'].file}
+  }}).then(function(d){
+    if(requestedIR!==currentIRFile){status.textContent='标注已保存，但页面已切换到其他红外帧';return;}
+    hideInspector();
+    ['037','038'].forEach(function(ck){
+      formalAnnotationState[ck]='found';
+      boxes[ck]=(d[ck]||[]).map(function(b){return samBoxToCanvas(ck,b);}).filter(function(b){return!!b;});
+    });
+    redrawAll();updateBoxCounts();
+    var total=boxes['037'].length+boxes['038'].length;
+    btn.textContent='🤖 SAM3+DA3: '+total+' 个目标 [R]';status.textContent='✅ 检测框与DA3相对深度已按当前IR帧分组保存';
+  }).catch(function(e){
+    btn.textContent='🤖 SAM3+DA3检测 [R]';status.textContent='SAM3+DA3失败: '+e.message;
+  }).finally(function(){sam3Busy=false;btn.disabled=false;});
+}
+
+// ═══ Sync 037 → 038 ═══════════════════════════════════════════
+function sync037to038(){
+  var status=document.getElementById('fl');
+  if(!boxes['037']||!boxes['037'].length){
+    status.textContent='⚠️ 037 暂无标注框';return;
+  }
+    // Deep copy each box from 037 to 038; same resolution (1920×1200)
+  boxes['038']=JSON.parse(JSON.stringify(boxes['037']));
+  // Recalculate canvas pixel positions for 038 panel
+  boxes['038'].forEach(function(b){
+    b.x1=b.y1=b.x2=b.y2=null;  // force recalculation on redraw
+    if(b.image_bbox)positionBoxFromImage('038',b);
+  });
+  selBox={cam:null,idx:-1};
+  redrawAll();updateBoxCounts();
+  status.textContent='✅ 已同步 '+(boxes['038'].length||0)+' 个框到 038';
+  setTimeout(function(){status.textContent='';},2000);
+}
+
+// ═══ Save ═══════════════════════════════════════════════════════
+function saveAnn(){
+  if(!matchData||!matchData.ir)return;
+  var status=document.getElementById('fl'),jobs=[{camera:'session',promise:api('/api/browse/annotations',{method:'POST',body:{seg_path:camSeg,ir_ts:matchData.ir.ts,boxes:boxes}})}];
+  ['037','038'].forEach(function(ck){if(matchData[ck])jobs.push({camera:ck,promise:saveFeatureAnnotations(ck)});});
+  status.textContent='正在保存...';
+  Promise.allSettled(jobs.map(function(job){return job.promise;})).then(function(results){
+    var failed=0;results.forEach(function(result,index){
+      if(result.status==='rejected')failed++;
+      else if(jobs[index].camera!=='session')formalAnnotationState[jobs[index].camera]='found';
+    });
+    updateBoxCounts();saveCSV();
+    status.textContent=failed?'部分保存失败（'+failed+'项）':'✅ JSON与会话标注已保存';
+    setTimeout(function(){status.textContent='';},2500);
+  });
+}
+function loadFrameAnnotations(md,token,irFile){
+  var url='/api/browse/frame_annotations?root='+encodeURIComponent(R)+'&seg_path='+encodeURIComponent(camSeg)+'&ir_file='+encodeURIComponent(irFile)
+    +'&file_037='+encodeURIComponent(md['037']?md['037'].file:'')+'&file_038='+encodeURIComponent(md['038']?md['038'].file:'');
+  api(url).then(function(d){
+    if(token!==frameRequestToken||irFile!==currentIRFile)return;
+    var cameras=d.cameras||{};
+    ['037','038'].forEach(function(ck){
+      var saved=cameras[ck];if(!saved)return;
+      if(matchData&&matchData[ck]&&saved.image_file&&saved.image_file!==matchData[ck].file)return;
+      if(saved.found){
+        formalAnnotationState[ck]=saved.valid===false?'invalid':'found';
+        boxes[ck]=saved.valid===false?[]:(saved.boxes||[]).map(function(b){return samBoxToCanvas(ck,b);}).filter(function(b){return!!b;});
+      }else formalAnnotationState[ck]='missing';
+    });
+    redrawAll();updateBoxCounts();
+  }).catch(function(){
+    if(token!==frameRequestToken||irFile!==currentIRFile)return;
+    ['037','038'].forEach(function(ck){if(formalAnnotationState[ck]==='pending')formalAnnotationState[ck]='error';});
+  });
+}
+function loadAnn(ts,token){
+  api('/api/browse/annotations?seg_path='+encodeURIComponent(camSeg)+'&ir_ts='+ts).then(function(d){
+    if(token!==frameRequestToken||!d.has_annotations)return;
+    var legacy=d.boxes||{};boxes.IR=legacy.IR||[];
+    boxes.IR.forEach(function(b){if(b.image_bbox)positionBoxFromImage('IR',b);});
+    ['037','038'].forEach(function(ck){
+      if((formalAnnotationState[ck]==='pending'||formalAnnotationState[ck]==='missing'||formalAnnotationState[ck]==='error'||formalAnnotationState[ck]==='invalid')&&(legacy[ck]||[]).length){
+        boxes[ck]=legacy[ck];boxes[ck].forEach(function(b){if(b.image_bbox)positionBoxFromImage(ck,b);});
+      }
+    });
+    redrawAll();updateBoxCounts();
+  }).catch(function(){});
+}
+function saveCSV(){
+  if(!matchData||!matchData.ir)return;var md=matchData;
+  api('/api/browse/csv',{method:'POST',body:{root:R,seg_path:camSeg,ir_file:md.ir.file,ir_ts:md.ir.ts,f037:md['037']?md['037'].file:'',ts037:md['037']?md['037'].ts:0,f038:md['038']?md['038'].file:'',ts038:md['038']?md['038'].ts:0}}).catch(function(){});
+}
+function loadCSV(){
+  if(!camSeg)return;
+  api('/api/browse/csv?root='+encodeURIComponent(R)+'&seg_path='+encodeURIComponent(camSeg)).catch(function(){});
+}
+
+// Keyboard
+document.addEventListener('keydown',function(e){
+  var tag=(e.target&&e.target.tagName||'').toLowerCase();
+  if(!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.repeat&&(e.key==='r'||e.key==='R')&&tag!=='input'&&tag!=='textarea'){
+    e.preventDefault();detectFeatures();return;
+  }
+  if(!e.ctrlKey&&!e.altKey){
+    if(e.key=='ArrowLeft'){e.preventDefault();navIR(-1);}
+    if(e.key=='ArrowRight'){e.preventDefault();navIR(1);}
+    if(e.key==' '){e.preventDefault();if(tag!=='input'&&tag!=='textarea')playToggle();}
+  }
+});
+
+function fmtTs(fn){var m=/_t(\d+\.\d+)/.exec(fn);return m?parseFloat(m[1]).toFixed(3):'?';}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+function sh(s,m){return s.length>m?s.substring(0,m-3)+'...':s;}
+
+['037','038','IR'].forEach(function(ck){
+  document.getElementById('i'+ck).addEventListener('load',function(){resizeCanvas(ck);applyImageZoom(ck);});
+});
+['037','038','IR','Radar'].forEach(setupImageZoom);
+window.addEventListener('resize',refreshImageLayouts);
+
+if(typeof TREE_DATA!=='undefined'&&TREE_DATA)renderTree(TREE_DATA);
+else api('/api/browse/tree?root='+encodeURIComponent(R)).then(function(d){renderTree(d.tree);});
+</script>
+</body>
+</html>

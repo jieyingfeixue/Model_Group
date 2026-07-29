@@ -1,0 +1,184 @@
+# =============================================================================
+# LH (多模态数据库) 数据集 sensor profile
+# -----------------------------------------------------------------------------
+# 数据集根目录:  D:/Dataset/多模态数据库
+# Scene 粒度  :  {dataset_root}/{scene_id}/   例如 ".../多模态数据库/1/"
+#
+# 单 scene 目录结构 (以 scene "1" 为例):
+#   {scene_dir}/
+#     readme.md
+#     with_cameras_capture_YYYYMMDD_HHMMSS_mmwave_udp.bin     # 原始 UDP 包
+#     mmwave_mat_1218style/
+#       mmwave_*_AntFrameNNN_FZxxxxxx-yyyyyy.mat              # 雷达 cube
+#       mmwave_*_AntFrameNNN_FZxxxxxx-yyyyyy.png              # 雷达伪彩图
+#     segment_<idx>_<t_start>_<t_end>/                         # 同步切分的子段
+#       images/
+#         hikrobot_camera__DA8679037__image_raw/*.jpg          # 主相机 1
+#         hikrobot_camera__DA8679038__image_raw/*.jpg          # 主相机 2
+#         usb_ir__image_raw/*.jpg                              # 红外辅助
+#       pointclouds/
+#         at360__points/at360__points_NNNNNN_tTTTTTT.TTT.pcd   # LiDAR
+#       gps/         nav100__fix/...
+#       heading/     nav100__heading/...
+#       nav100_state/nav100__state/nav100__state.csv           # 时间戳基准
+#
+# 同步约定 (摘自 scene readme.md):
+#   * "nav100__state.csv" 中的时间戳是基准, 用于和其他模态时间戳对齐
+#   * 各 jpg/pcd 文件名中的 "_tNNNNNN.NNN" 即为该模态自身的相对时间戳
+#   * mmwave .mat 不带 image-range CSV, 需通过 nav 时间戳 + AntFrame 帧号反查
+# =============================================================================
+
+profile_name: "LH"
+name: "LH-多模态数据库"
+dataset: "lh"
+coordinate_system: "lidar_centric"   # at360 LiDAR 作为 ego 原点候选 (TODO 确认)
+
+# ── Scene / Segment 扫描 ────────────────────────────────────────────────────
+# adapter 应将 (scene_id, segment_name, image_basename) 编码为一个 frame_id
+sequences:
+  root: "{dataset_root}"
+  scene_pattern:   "{dataset_root}/{scene_id}"
+  segment_pattern: "{dataset_root}/{scene_id}/{segment}"
+  # frame 列表锚定主相机 1 的 jpg 顺序
+  frame_list_source: directory_scan
+
+# ── 帧时间戳同步 (LH 专用) ──────────────────────────────────────────────────
+# LH 没有 mat_to_image_range.csv; 改用文件名内嵌的相对时间戳 + nav csv
+frame_sync:
+  reference_csv: "{segment_dir}/nav100_state/nav100__state/nav100__state.csv"
+  filename_timestamp_regex: "_t(\\d+\\.\\d+)"
+  mmwave_match_window_sec: 0.05
+  lidar_match_window_sec: 0.05
+
+# ── 传感器 ─────────────────────────────────────────────────────────────────
+sensors:
+
+  # ── 主相机 1 (海康 DA8679038, rightcam(1) 实测标定) ─────────────────────
+  # 内参来源: D:/Dataset/多模态数据库/rightcam(1)  (camera_matrix + distortion)
+  # 外参: body→camera 坐标系约定
+  #   body: x=右, y=前, z=上 (与 mmwave .mat 一致)
+  #   camera: x=右, y=下, z=前 (OpenCV 标准)
+  #   R = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]
+  #   t = -R @ offset_body  (offset_body = radar_to_camera_offset_m)
+  #   offset_body = [-0.201, -0.447, 1.023]
+  #   t = [0.201, 1.023, 0.447]
+  camera_main_left:
+    type: camera
+    modality: rgb
+    data_pattern: "{segment_dir}/images/hikrobot_camera__DA8679037__image_raw/{frame_basename}.jpg"
+    intrinsics_source: static
+    # oST 双目标定结果（已去畸变）
+    intrinsics:
+      fx: 12342.233207
+      fy: 12338.268051
+      cx: 959.500000
+      cy: 599.500000
+      distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
+    extrinsics_source: static
+    extrinsics:
+      matrix: [ 1.0,  0.0,  0.0,  0.201,
+                0.0,  0.0, -1.0,  1.023,
+                0.0,  1.0,  0.0,  0.447,
+                0.0,  0.0,  0.0,  1.0  ]
+    # HFOV = 2 * atan(1920 / (2 * 12342.23)) ≈ 8.88°
+    hfov_deg: 8.88
+
+  # ── 主相机 2 (海康 DA8679038, oST 标定) ──────────────────────────────────
+  camera_main_right:
+    type: camera
+    modality: rgb
+    data_pattern: "{segment_dir}/images/hikrobot_camera__DA8679038__image_raw/{frame_basename}.jpg"
+    intrinsics_source: static
+    intrinsics:
+      fx: 12585.592750
+      fy: 12588.754798
+      cx: 959.500000
+      cy: 599.500000
+      distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
+    extrinsics_source: static
+    extrinsics:
+      matrix: [1.0, 0.0, 0.0, 0.0,
+               0.0, 1.0, 0.0, 0.0,
+               0.0, 0.0, 1.0, 0.0,
+               0.0, 0.0, 0.0, 1.0]
+
+  # ── 红外辅助相机 (USB IR) ─────────────────────────────────────────────────
+  camera_ir:
+    enabled: false
+    type: camera
+    modality: rgb
+    data_pattern: "{segment_dir}/images/usb_ir__image_raw/{frame_basename}.jpg"
+    intrinsics_source: static
+    intrinsics:
+      fx: 0.0
+      fy: 0.0
+      cx: 0.0
+      cy: 0.0
+      distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
+    extrinsics_source: identity
+
+  # ── LiDAR (at360) ─────────────────────────────────────────────────────────
+  lidar_at360:
+    type: lidar
+    modality: pointcloud
+    data_pattern: "{segment_dir}/pointclouds/at360__points/{lidar_basename}.pcd"
+    point_format: [x, y, z, intensity]
+    extrinsics_source: identity
+
+  # ── 毫米波雷达 (4D mmwave, 1218style) ─────────────────────────────────────
+  radar_mmwave:
+    type: radar
+    modality: tensor_4d
+    data_pattern: "{scene_dir}/mmwave_mat_1218style/{mat_basename}.mat"
+    preview_pattern: "{scene_dir}/mmwave_mat_1218style/{mat_basename}.png"
+    tensor_axes: [z, y, x]
+    tensor_resolution:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    extrinsics_source: static
+    extrinsics:
+      matrix: [1.0, 0.0, 0.0, 0.0,
+               0.0, 1.0, 0.0, 0.0,
+               0.0, 0.0, 1.0, 0.0,
+               0.0, 0.0, 0.0, 1.0]
+
+# ── 标签 ────────────────────────────────────────────────────────────────────
+labels:
+  format: lh
+  data_pattern: "{segment_dir}/labels_3d/{frame_basename}.txt"
+
+# ── Viewer hints ────────────────────────────────────────────────────────────
+viewer:
+  lidar_view_presets:
+    front: [[-45, 0, 20], [15, 0, 0], [0, 0, 1]]
+    rear:  [[ 45, 0, 20], [-15, 0, 0], [0, 0, 1]]
+    left:  [[0, -45, 20], [0,  15, 0], [0, 0, 1]]
+    right: [[0,  45, 20], [0, -15, 0], [0, 0, 1]]
+    top:   [[0,   0, 70], [0,   0, 0], [0, 1, 0]]
+
+  camera_stereo_crop: {}
+
+  # Radar原点 (mmwave 天线相位中心) → 主相机光心 在车体坐标下的偏移 (单位米)
+  # 车体坐标约定:  x=右,  y=前,  z=上   (与 mmwave .mat 输出一致)
+  #
+  # 测量来源 (CATIA Composer R2024):
+  #   相机位置 (mm):  X=  -3.53,  Y= -198.90,  Z=  594.83
+  #   雷达位置 (mm):  X= 443.06,  Y=    2.36,  Z= -427.67
+  #   ΔP = cam − radar = (-446.59, -201.26, 1022.50) mm
+  # 假设 Composer 全局轴 X=车前, Y=车右, Z=车上 (按量级反推:|ΔZ|=1m 最大→竖直,
+  #   |ΔX|=0.45m → 车长, |ΔY|=0.20m → 车宽), 映射到 YAML [右,前,上]:
+  #     右 = ΔY = -0.201 m   (相机比雷达偏左 0.20 m)
+  #     前 = ΔX = -0.447 m   (相机比雷达偏后 0.45 m)
+  #     上 = ΔZ = +1.023 m   (相机比雷达高 1.02 m)
+  # 若实测投影方向不对, 通常是 Composer 轴向假设错误 — 量 左/右前轮 与
+  # 前/后保险杠 的分量验证后, 重排三个分量 (含正负号) 即可。
+  radar_to_camera_offset_m: [-0.201, -0.447, 1.023]
+
+  radar:
+    resolution: 0.0
+    threshold_pct: 90.0
+    colormap: plasma
+
+  frame_list_sensor: "camera_main_left"
+  frame_list_pattern: "{segment_dir}/images/hikrobot_camera__DA8679038__image_raw/*.jpg"

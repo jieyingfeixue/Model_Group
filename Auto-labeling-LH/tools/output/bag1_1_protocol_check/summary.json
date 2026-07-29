@@ -1,0 +1,35 @@
+{
+  "input_file": "D:\\Dataset\\LH_2026-04-27\\bag1.1\\with_cameras_capture_20260427_151113_mmwave_udp.bin",
+  "packet_size_bytes": 8624,
+  "packet_count": 5000,
+  "trailing_bytes": 0,
+  "antenna_frame_count": 3,
+  "sync_mismatch_counts": {
+    "header_start_ABAB": 0,
+    "header_start_2_ABAB": 0,
+    "header_end_BCBC": 0,
+    "header_end_2_BCBC": 0,
+    "sum_start_1122": 0,
+    "sum_start_2_1122": 0,
+    "sum_end_1_2233": 0,
+    "sum_end_2233": 0,
+    "diff_start_3344": 0,
+    "diff_start_2_3344": 0,
+    "diff_end_1_4455": 0,
+    "diff_end_4455": 0,
+    "terrain_start_CDCD": 0,
+    "terrain_start_2_CDCD": 0,
+    "terrain_end_1_DEDE": 0,
+    "terrain_end_DEDE": 0,
+    "detection_start_ACAC": 0,
+    "detection_start_2_ACAC": 0,
+    "detection_end_1_BDBD": 0,
+    "detection_end_BDBD": 0
+  },
+  "coordinate_mode": "nwu",
+  "exports": {
+    "terrain_rows": 0,
+    "detection_frames": 3,
+    "detection_objects": 0
+  }
+}

@@ -82,7 +82,9 @@ services:
     volumes:
       - ./backend:/app
       - ./data/train_jobs:/data/train_jobs
+      # 外部 LabelMe：队友导出目录 / LH 工具默认写出目录
       - ./label_with_cameras_capture_20260427_151113:/labels/label_with_cameras_capture_20260427_151113:ro
+      - ./label_with_annotation_and_depth:/labels/label_with_annotation_and_depth:ro
     restart: unless-stopped
 
   celery-worker:

@@ -1,0 +1,489 @@
+=== 数据集汇总 ===
+总日期目录: 9
+总 segment 数: 283
+总 IR 图片数: 454634
+
+【4_27】 4个capture / 19个segment / 13614张IR图
+  ├ with_cameras_capture_20260427_151113: 2个part / 4个segment / 2512张
+  │  ├ with_cameras_capture_20260427_151113_part000_2026-04-27-15-11-25: 2个segment / 1677张
+  │  │  ├ segment_000_000076.000_000102.000  IR:391张  t_start:000s
+  │  │  ├ segment_001_000112.000_000203.000  IR:1286张  t_start:001s
+  │  ├ with_cameras_capture_20260427_151113_part001_2026-04-27-15-15-25: 2个segment / 835张
+  │  │  ├ segment_000_000022.000_000074.000  IR:751张  t_start:000s
+  │  │  ├ segment_001_000085.000_000090.000  IR:84张  t_start:001s
+  ├ with_cameras_capture_20260427_151124: 1个part / 4个segment / 643张
+  │  ├ with_cameras_capture_20260427_151124_part000_2026-04-27-15-11-31: 4个segment / 643张
+  │  │  ├ segment_000_000078.000_000108.000  IR:415张  t_start:000s
+  │  │  ├ segment_001_000184.000_000189.000  IR:79张  t_start:001s
+  │  │  ├ segment_002_000199.000_000205.000  IR:84张  t_start:002s
+  │  │  ├ segment_003_000210.000_000215.000  IR:65张  t_start:003s
+  ├ with_cameras_capture_20260427_165128: 3个part / 5个segment / 4694张
+  │  ├ with_cameras_capture_20260427_165128_part000_2026-04-27-16-51-35: 2个segment / 1901张
+  │  │  ├ segment_000_000078.000_000083.000  IR:76张  t_start:000s
+  │  │  ├ segment_001_000106.000_000235.000  IR:1825张  t_start:001s
+  │  ├ with_cameras_capture_20260427_165128_part001_2026-04-27-16-55-38: 2个segment / 2666张
+  │  │  ├ segment_000_000000.000_000170.000  IR:2405张  t_start:000s
+  │  │  ├ segment_001_000175.000_000193.000  IR:261张  t_start:001s
+  │  ├ with_cameras_capture_20260427_165128_part002_2026-04-27-16-59-43: 1个segment / 127张
+  │  │  ├ segment_000_000052.000_000060.000  IR:127张  t_start:000s
+  ├ with_cameras_capture_20260427_175645: 4个part / 6个segment / 5765张
+  │  ├ with_cameras_capture_20260427_175645_part000_2026-04-27-17-56-57: 1个segment / 626张
+  │  │  ├ segment_000_000183.000_000229.000  IR:626张  t_start:000s
+  │  ├ with_cameras_capture_20260427_175645_part001_2026-04-27-18-01-06: 1个segment / 2873张
+  │  │  ├ segment_000_000017.000_000241.000  IR:2873张  t_start:000s
+  │  ├ with_cameras_capture_20260427_175645_part002_2026-04-27-18-05-14: 3个segment / 1566张
+  │  │  ├ segment_000_000000.000_000104.000  IR:1308张  t_start:000s
+  │  │  ├ segment_001_000107.000_000114.000  IR:87张  t_start:001s
+  │  │  ├ segment_002_000220.000_000232.000  IR:171张  t_start:002s
+  │  ├ with_cameras_capture_20260427_175645_part003_2026-04-27-18-09-22: 1个segment / 700张
+  │  │  ├ segment_000_000000.000_000055.000  IR:700张  t_start:000s
+
+【4_29】 6个capture / 32个segment / 16877张IR图
+  ├ with_cameras_capture_20260429_161943: 2个part / 4个segment / 3366张
+  │  ├ with_cameras_capture_20260429_161943_part000_2026-04-29-16-19-50: 2个segment / 3288张
+  │  │  ├ segment_000_000062.000_000239.000  IR:2504张  t_start:000s
+  │  │  ├ segment_001_000244.000_000298.000  IR:784张  t_start:001s
+  │  ├ with_cameras_capture_20260429_161943_part001_2026-04-29-16-24-58: 2个segment / 78张
+  │  │  ├ segment_000_000000.000_000001.500  IR:23张  t_start:000s
+  │  │  ├ segment_001_000005.000_000010.000  IR:55张  t_start:001s
+  ├ with_cameras_capture_20260429_164703: 2个part / 8个segment / 3315张
+  │  ├ with_cameras_capture_20260429_164703_part000_2026-04-29-16-47-10: 4个segment / 2910张
+  │  │  ├ segment_000_000000.000_000212.000  IR:2228张  t_start:000s
+  │  │  ├ segment_001_000230.000_000235.000  IR:50张  t_start:001s
+  │  │  ├ segment_002_000247.000_000266.000  IR:215张  t_start:002s
+  │  │  ├ segment_003_000272.000_000312.000  IR:417张  t_start:003s
+  │  ├ with_cameras_capture_20260429_164703_part001_2026-04-29-16-52-31: 4个segment / 405张
+  │  │  ├ segment_000_000000.000_000011.000  IR:138张  t_start:000s
+  │  │  ├ segment_001_000015.000_000021.000  IR:72张  t_start:001s
+  │  │  ├ segment_002_000025.000_000030.000  IR:56张  t_start:002s
+  │  │  ├ segment_003_000047.000_000059.000  IR:139张  t_start:003s
+  ├ with_cameras_capture_20260429_165854: 2个part / 6个segment / 3870张
+  │  ├ with_cameras_capture_20260429_165854_part000_2026-04-29-16-59-02: 3个segment / 2273张
+  │  │  ├ segment_000_000058.000_000151.000  IR:846张  t_start:000s
+  │  │  ├ segment_000_000225.000_000309.000  IR:987张  t_start:000s
+  │  │  ├ segment_001_000225.000_000309.000  IR:440张  t_start:001s
+  │  ├ with_cameras_capture_20260429_165854_part001_2026-04-29-17-04-19: 3个segment / 1597张
+  │  │  ├ segment_000_000000.000_000119.000  IR:1374张  t_start:000s
+  │  │  ├ segment_001_000122.000_000137.000  IR:169张  t_start:001s
+  │  │  ├ segment_002_000242.000_000247.000  IR:54张  t_start:002s
+  ├ with_cameras_capture_20260429_165931: 2个part / 5个segment / 1892张
+  │  ├ with_cameras_capture_20260429_165931_part000_2026-04-29-16-59-38: 4个segment / 588张
+  │  │  ├ segment_000_000039.000_000052.000  IR:176张  t_start:000s
+  │  │  ├ segment_001_000260.000_000262.000  IR:14张  t_start:001s
+  │  │  ├ segment_002_000276.000_000288.000  IR:103张  t_start:002s
+  │  │  ├ segment_003_000305.000_000333.000  IR:295张  t_start:003s
+  │  ├ with_cameras_capture_20260429_165931_part001_2026-04-29-17-05-19: 1个segment / 1304张
+  │  │  ├ segment_000_000000.000_000133.000  IR:1304张  t_start:000s
+  ├ with_cameras_capture_20260429_185909: 2个part / 6个segment / 2567张
+  │  ├ with_cameras_capture_20260429_185909_part000_2026-04-29-18-59-21: 4个segment / 2345张
+  │  │  ├ segment_000_000000.000_000182.000  IR:2104张  t_start:000s
+  │  │  ├ segment_001_000199.000_000201.000  IR:22张  t_start:001s
+  │  │  ├ segment_002_000223.000_000236.000  IR:176张  t_start:002s
+  │  │  ├ segment_003_000316.000_000320.000  IR:43张  t_start:003s
+  │  ├ with_cameras_capture_20260429_185909_part001_2026-04-29-19-04-51: 2个segment / 222张
+  │  │  ├ segment_000_000000.000_000006.000  IR:75张  t_start:000s
+  │  │  ├ segment_001_000207.000_000221.000  IR:147张  t_start:001s
+  ├ with_cameras_capture_20260429_195137: 1个part / 3个segment / 1867张
+  │  ├ with_cameras_capture_20260429_195137_part001_2026-04-29-19-56-49: 3个segment / 1867张
+  │  │  ├ segment_000_000099.000_000207.000  IR:1805张  t_start:000s
+  │  │  ├ segment_001_000211.000_000215.000  IR:29张  t_start:001s
+  │  │  ├ segment_002_000226.500_000231.000  IR:33张  t_start:002s
+
+【4_30】 8个capture / 44个segment / 50640张IR图
+  ├ with_cameras_capture_20260430_101120: 2个part / 6个segment / 1978张
+  │  ├ with_cameras_capture_20260430_101120_part000_2026-04-30-10-11-26: 4个segment / 840张
+  │  │  ├ segment_000_000029.000_000034.000  IR:115张  t_start:000s
+  │  │  ├ segment_001_000110.000_000120.000  IR:198张  t_start:001s
+  │  │  ├ segment_002_000180.000_000191.000  IR:273张  t_start:002s
+  │  │  ├ segment_003_000260.000_000281.000  IR:254张  t_start:003s
+  │  ├ with_cameras_capture_20260430_101120_part001_2026-04-30-10-16-15: 2个segment / 1138张
+  │  │  ├ segment_000_000000.000_000059.000  IR:1105张  t_start:000s
+  │  │  ├ segment_001_000074.000_000079.000  IR:33张  t_start:001s
+  ├ with_cameras_capture_20260430_101502: 2个part / 2个segment / 6843张
+  │  ├ with_cameras_capture_20260430_101502_part000_2026-04-30-10-15-08: 1个segment / 6676张
+  │  │  ├ segment_000_000000.000_000278.000  IR:6676张  t_start:000s
+  │  ├ with_cameras_capture_20260430_101502_part001_2026-04-30-10-19-54: 1个segment / 167张
+  │  │  ├ segment_000_000096.000_000102.000  IR:167张  t_start:000s
+  ├ with_cameras_capture_20260430_150023: 2个part / 7个segment / 2187张
+  │  ├ with_cameras_capture_20260430_150023_part000_2026-04-30-15-00-29: 4个segment / 1921张
+  │  │  ├ segment_000_000000.000_000038.000  IR:769张  t_start:000s
+  │  │  ├ segment_001_000041.000_000073.000  IR:746张  t_start:001s
+  │  │  ├ segment_002_000075.000_000085.000  IR:250张  t_start:002s
+  │  │  ├ segment_003_000147.000_000153.000  IR:156张  t_start:003s
+  │  ├ with_cameras_capture_20260430_150023_part001_2026-04-30-15-05-33: 3个segment / 266张
+  │  │  ├ segment_000_000150.000_000158.000  IR:204张  t_start:000s
+  │  │  ├ segment_001_000183.000_000185.000  IR:8张  t_start:001s
+  │  │  ├ segment_002_000279.000_000281.000  IR:54张  t_start:002s
+  ├ with_cameras_capture_20260430_150451: 2个part / 4个segment / 9479张
+  │  ├ with_cameras_capture_20260430_150451_part000_2026-04-30-15-04-57: 2个segment / 5484张
+  │  │  ├ segment_000_000000.000_000003.000  IR:70张  t_start:000s
+  │  │  ├ segment_001_000038.000_000284.000  IR:5414张  t_start:001s
+  │  ├ with_cameras_capture_20260430_150451_part001_2026-04-30-15-09-48: 2个segment / 3995张
+  │  │  ├ segment_000_000000.000_000166.000  IR:3895张  t_start:000s
+  │  │  ├ segment_001_000171.000_000177.000  IR:100张  t_start:001s
+  ├ with_cameras_capture_20260430_191146: 3个part / 9个segment / 3027张
+  │  ├ with_cameras_capture_20260430_191146_part000_2026-04-30-19-11-52: 2个segment / 597张
+  │  │  ├ segment_000_000000.000_000014.000  IR:337张  t_start:000s
+  │  │  ├ segment_001_000020.000_000030.000  IR:260张  t_start:001s
+  │  ├ with_cameras_capture_20260430_191146_part001_2026-04-30-19-16-43: 2个segment / 1127张
+  │  │  ├ segment_000_000139.000_000180.000  IR:912张  t_start:000s
+  │  │  ├ segment_001_000273.000_000281.000  IR:215张  t_start:001s
+  │  ├ with_cameras_capture_20260430_191146_part002_2026-04-30-19-21-32: 5个segment / 1303张
+  │  │  ├ segment_000_000012.000_000019.000  IR:190张  t_start:000s
+  │  │  ├ segment_001_000020.000_000025.000  IR:115张  t_start:001s
+  │  │  ├ segment_002_000028.000_000031.000  IR:71张  t_start:002s
+  │  │  ├ segment_003_000036.000_000038.000  IR:43张  t_start:003s
+  │  │  ├ segment_004_000040.000_000086.000  IR:884张  t_start:004s
+  ├ with_cameras_capture_20260430_191328: 3个part / 6个segment / 13332张
+  │  ├ with_cameras_capture_20260430_191328_part000_2026-04-30-19-13-34: 2个segment / 5560张
+  │  │  ├ segment_000_000000.000_000068.000  IR:1429张  t_start:000s
+  │  │  ├ segment_001_000114.000_000281.000  IR:4131张  t_start:001s
+  │  ├ with_cameras_capture_20260430_191328_part001_2026-04-30-19-18-22: 3个segment / 6098张
+  │  │  ├ segment_000_000000.000_000241.000  IR:5884张  t_start:000s
+  │  │  ├ segment_001_000244.000_000245.500  IR:40张  t_start:001s
+  │  │  ├ segment_002_000270.000_000277.000  IR:174张  t_start:002s
+  │  ├ with_cameras_capture_20260430_191328_part002_2026-04-30-19-23-09: 1个segment / 1674张
+  │  │  ├ segment_000_000006.000_000076.000  IR:1674张  t_start:000s
+  ├ with_cameras_capture_20260430_195500: 2个part / 5个segment / 4754张
+  │  ├ with_cameras_capture_20260430_195500_part000_2026-04-30-19-55-06: 1个segment / 1873张
+  │  │  ├ segment_000_000000.000_000076.000  IR:1873张  t_start:000s
+  │  ├ with_cameras_capture_20260430_195500_part001_2026-04-30-19-59-52: 4个segment / 2881张
+  │  │  ├ segment_000_000094.000_000141.000  IR:1183张  t_start:000s
+  │  │  ├ segment_001_000156.000_000182.000  IR:679张  t_start:001s
+  │  │  ├ segment_002_000195.000_000214.000  IR:516张  t_start:002s
+  │  │  ├ segment_003_000220.000_000241.000  IR:503张  t_start:003s
+  ├ with_cameras_capture_20260430_202854: 2个part / 5个segment / 9040张
+  │  ├ with_cameras_capture_20260430_202854_part000_2026-04-30-20-29-00: 3个segment / 6273张
+  │  │  ├ segment_000_000000.000_000074.000  IR:1754张  t_start:000s
+  │  │  ├ segment_001_000080.000_000120.000  IR:876张  t_start:001s
+  │  │  ├ segment_002_000123.000_000281.000  IR:3643张  t_start:002s
+  │  ├ with_cameras_capture_20260430_202854_part001_2026-04-30-20-33-48: 2个segment / 2767张
+  │  │  ├ segment_000_000000.000_000104.000  IR:2374张  t_start:000s
+  │  │  ├ segment_001_000110.000_000129.000  IR:393张  t_start:001s
+
+【5_19】 1个capture / 11个segment / 5741张IR图
+  ├ with_cameras_capture_20260519_143539: 2个part / 11个segment / 5741张
+  │  ├ with_cameras_capture_20260519_143539_part000_2026-05-19-14-35-45: 3个segment / 3544张
+  │  │  ├ segment_000_000000.000_000086.000  IR:2064张  t_start:000s
+  │  │  ├ segment_001_000121.000_000143.000  IR:539张  t_start:001s
+  │  │  ├ segment_002_000160.000_000200.000  IR:941张  t_start:002s
+  │  ├ with_cameras_capture_20260519_143539_part001_2026-05-19-14-39-28: 8个segment / 2197张
+  │  │  ├ segment_000_000000.000_000003.000  IR:73张  t_start:000s
+  │  │  ├ segment_001_000012.000_000028.000  IR:370张  t_start:001s
+  │  │  ├ segment_002_000038.000_000048.000  IR:216张  t_start:002s
+  │  │  ├ segment_003_000081.500_000084.500  IR:62张  t_start:003s
+  │  │  ├ segment_004_000090.000_000108.500  IR:411张  t_start:004s
+  │  │  ├ segment_005_000128.000_000142.000  IR:310张  t_start:005s
+  │  │  ├ segment_006_000164.500_000190.000  IR:566张  t_start:006s
+  │  │  ├ segment_007_000196.000_000205.000  IR:189张  t_start:007s
+
+【5_9】 11个capture / 117个segment / 82338张IR图
+  ├ with_cameras_capture_20260508_171129_1: 2个part / 8个segment / 5298张
+  │  ├ with_cameras_capture_20260508_171129_part000_2026-05-08-17-11-35: 7个segment / 5069张
+  │  │  ├ segment_000_000000.000_000049.000  IR:1182张  t_start:000s
+  │  │  ├ segment_001_000054.000_000063.000  IR:207张  t_start:001s
+  │  │  ├ segment_002_000067.000_000070.000  IR:78张  t_start:002s
+  │  │  ├ segment_003_000098.000_000102.000  IR:103张  t_start:003s
+  │  │  ├ segment_004_000117.000_000190.000  IR:1703张  t_start:004s
+  │  │  ├ segment_005_000199.000_000244.000  IR:1088张  t_start:005s
+  │  │  ├ segment_006_000251.000_000279.000  IR:708张  t_start:006s
+  │  ├ with_cameras_capture_20260508_171129_part001_2026-05-08-17-16-22: 1个segment / 229张
+  │  │  ├ segment_000_000000.000_000013.000  IR:229张  t_start:000s
+  ├ with_cameras_capture_20260509_113036: 2个part / 11个segment / 5382张
+  │  ├ with_cameras_capture_20260509_113036_part000_2026-05-09-11-30-42: 7个segment / 2668张
+  │  │  ├ segment_000_000000.000_000027.000  IR:664张  t_start:000s
+  │  │  ├ segment_001_000040.000_000050.000  IR:260张  t_start:001s
+  │  │  ├ segment_002_000055.000_000069.000  IR:331张  t_start:002s
+  │  │  ├ segment_003_000130.000_000139.000  IR:208张  t_start:003s
+  │  │  ├ segment_004_000144.000_000151.000  IR:165张  t_start:004s
+  │  │  ├ segment_005_000154.000_000157.000  IR:63张  t_start:005s
+  │  │  ├ segment_006_000241.000_000280.000  IR:977张  t_start:006s
+  │  ├ with_cameras_capture_20260509_113036_part001_2026-05-09-11-35-29: 4个segment / 2714张
+  │  │  ├ segment_000_000000.000_000060.000  IR:1455张  t_start:000s
+  │  │  ├ segment_001_000093.000_000140.000  IR:1124张  t_start:001s
+  │  │  ├ segment_002_000203.000_000207.000  IR:103张  t_start:002s
+  │  │  ├ segment_003_000225.000_000228.000  IR:32张  t_start:003s
+  ├ with_cameras_capture_20260509_113112_3: 3个part / 13个segment / 8247张
+  │  ├ with_cameras_capture_20260509_113112_part000_2026-05-09-11-31-18: 6个segment / 2966张
+  │  │  ├ segment_000_000002.000_000004.000  IR:38张  t_start:000s
+  │  │  ├ segment_001_000041.000_000044.000  IR:17张  t_start:001s
+  │  │  ├ segment_002_000048.000_000138.000  IR:2153张  t_start:002s
+  │  │  ├ segment_003_000141.000_000155.000  IR:327张  t_start:003s
+  │  │  ├ segment_004_000212.000_000222.000  IR:209张  t_start:004s
+  │  │  ├ segment_005_000272.000_000282.000  IR:222张  t_start:005s
+  │  ├ with_cameras_capture_20260509_113112_part001_2026-05-09-11-36-07: 5个segment / 4744张
+  │  │  ├ segment_000_000000.000_000123.000  IR:2957张  t_start:000s
+  │  │  ├ segment_001_000145.000_000148.000  IR:72张  t_start:001s
+  │  │  ├ segment_002_000149.000_000157.000  IR:208张  t_start:002s
+  │  │  ├ segment_003_000171.000_000176.000  IR:123张  t_start:003s
+  │  │  ├ segment_004_000222.000_000278.000  IR:1384张  t_start:004s
+  │  ├ with_cameras_capture_20260509_113112_part002_2026-05-09-11-40-53: 2个segment / 537张
+  │  │  ├ segment_000_000000.000_000021.000  IR:519张  t_start:000s
+  │  │  ├ segment_001_000027.000_000028.000  IR:18张  t_start:001s
+  ├ with_cameras_capture_20260509_113138_2: 2个part / 6个segment / 7937张
+  │  ├ with_cameras_capture_20260509_113138_part000_2026-05-09-11-31-44: 5个segment / 4773张
+  │  │  ├ segment_000_000001.000_000153.000  IR:3653张  t_start:000s
+  │  │  ├ segment_001_000163.000_000190.000  IR:661张  t_start:001s
+  │  │  ├ segment_002_000208.000_000212.000  IR:72张  t_start:002s
+  │  │  ├ segment_003_000218.000_000225.000  IR:149张  t_start:003s
+  │  │  ├ segment_004_000230.000_000240.000  IR:238张  t_start:004s
+  │  ├ with_cameras_capture_20260509_113138_part001_2026-05-09-11-36-32: 1个segment / 3164张
+  │  │  ├ segment_000_000034.000_000171.000  IR:3164张  t_start:000s
+  ├ with_cameras_capture_20260509_113729: 2个part / 7个segment / 5603张
+  │  ├ with_cameras_capture_20260509_113729_part000_2026-05-09-11-37-36: 4个segment / 4851张
+  │  │  ├ segment_000_000001.000_000008.000  IR:129张  t_start:000s
+  │  │  ├ segment_001_000012.000_000042.000  IR:706张  t_start:001s
+  │  │  ├ segment_002_000066.000_000077.000  IR:265张  t_start:002s
+  │  │  ├ segment_003_000119.000_000282.000  IR:3751张  t_start:003s
+  │  ├ with_cameras_capture_20260509_113729_part001_2026-05-09-11-42-25: 3个segment / 752张
+  │  │  ├ segment_000_000009.000_000012.000  IR:72张  t_start:000s
+  │  │  ├ segment_001_000029.000_000044.000  IR:340张  t_start:001s
+  │  │  ├ segment_002_000048.000_000065.000  IR:340张  t_start:002s
+  ├ with_cameras_capture_20260509_133549: 2个part / 6个segment / 9625张
+  │  ├ with_cameras_capture_20260509_133549_part000_2026-05-09-13-35-55: 2个segment / 4890张
+  │  │  ├ segment_000_000050.000_000223.000  IR:4400张  t_start:000s
+  │  │  ├ segment_001_000256.000_000277.000  IR:490张  t_start:001s
+  │  ├ with_cameras_capture_20260509_133549_part001_2026-05-09-13-40-40: 4个segment / 4735张
+  │  │  ├ segment_000_000000.000_000065.000  IR:1596张  t_start:000s
+  │  │  ├ segment_001_000080.000_000088.000  IR:201张  t_start:001s
+  │  │  ├ segment_002_000115.000_000222.000  IR:2649张  t_start:002s
+  │  │  ├ segment_003_000266.000_000277.000  IR:289张  t_start:003s
+  ├ with_cameras_capture_20260509_133633: 3个part / 14个segment / 10574张
+  │  ├ with_cameras_capture_20260509_133633_part000_2026-05-09-13-36-39: 6个segment / 5189张
+  │  │  ├ segment_000_000000.000_000038.000  IR:957张  t_start:000s
+  │  │  ├ segment_001_000042.500_000045.500  IR:54张  t_start:001s
+  │  │  ├ segment_002_000073.000_000088.000  IR:376张  t_start:002s
+  │  │  ├ segment_003_000095.000_000195.000  IR:2517张  t_start:003s
+  │  │  ├ segment_004_000219.000_000257.000  IR:1003张  t_start:004s
+  │  │  ├ segment_005_000262.000_000273.000  IR:282张  t_start:005s
+  │  ├ with_cameras_capture_20260509_133633_part001_2026-05-09-13-41-26: 6个segment / 4669张
+  │  │  ├ segment_000_000001.000_000013.000  IR:299张  t_start:000s
+  │  │  ├ segment_001_000026.000_000035.000  IR:231张  t_start:001s
+  │  │  ├ segment_002_000040.000_000106.000  IR:1637张  t_start:002s
+  │  │  ├ segment_003_000145.000_000179.000  IR:859张  t_start:003s
+  │  │  ├ segment_004_000188.000_000198.000  IR:199张  t_start:004s
+  │  │  ├ segment_005_000215.000_000280.000  IR:1444张  t_start:005s
+  │  ├ with_cameras_capture_20260509_133633_part002_2026-05-09-13-46-13: 2个segment / 716张
+  │  │  ├ segment_000_000000.000_000027.500  IR:599张  t_start:000s
+  │  │  ├ segment_001_000031.000_000038.000  IR:117张  t_start:001s
+  ├ with_cameras_capture_20260509_143912: 2个part / 13个segment / 7159张
+  │  ├ with_cameras_capture_20260509_143912_part000_2026-05-09-14-39-18: 10个segment / 4666张
+  │  │  ├ segment_000_000000.000_000010.000  IR:257张  t_start:000s
+  │  │  ├ segment_001_000014.000_000050.000  IR:914张  t_start:001s
+  │  │  ├ segment_002_000053.000_000064.000  IR:287张  t_start:002s
+  │  │  ├ segment_003_000073.000_000076.000  IR:71张  t_start:003s
+  │  │  ├ segment_004_000094.000_000103.000  IR:223张  t_start:004s
+  │  │  ├ segment_005_000107.500_000161.000  IR:1289张  t_start:005s
+  │  │  ├ segment_006_000182.000_000201.000  IR:467张  t_start:006s
+  │  │  ├ segment_007_000203.000_000233.000  IR:747张  t_start:007s
+  │  │  ├ segment_008_000235.000_000238.000  IR:75张  t_start:008s
+  │  │  ├ segment_009_000260.000_000273.000  IR:336张  t_start:009s
+  │  ├ with_cameras_capture_20260509_143912_part001_2026-05-09-14-44-03: 3个segment / 2493张
+  │  │  ├ segment_000_000000.000_000026.000  IR:588张  t_start:000s
+  │  │  ├ segment_001_000053.000_000100.000  IR:1171张  t_start:001s
+  │  │  ├ segment_002_000120.000_000152.000  IR:734张  t_start:002s
+  ├ with_cameras_capture_20260509_173327: 3个part / 19个segment / 9467张
+  │  ├ with_cameras_capture_20260509_173327_part000_2026-05-09-17-33-33: 9个segment / 3526张
+  │  │  ├ segment_000_000065.000_000078.000  IR:324张  t_start:000s
+  │  │  ├ segment_001_000094.000_000098.000  IR:97张  t_start:001s
+  │  │  ├ segment_002_000101.000_000103.500  IR:63张  t_start:002s
+  │  │  ├ segment_003_000118.000_000129.500  IR:304张  t_start:003s
+  │  │  ├ segment_004_000131.000_000176.000  IR:1100张  t_start:004s
+  │  │  ├ segment_005_000180.000_000186.000  IR:151张  t_start:005s
+  │  │  ├ segment_006_000188.000_000203.000  IR:349张  t_start:006s
+  │  │  ├ segment_007_000216.000_000235.000  IR:473张  t_start:007s
+  │  │  ├ segment_008_000242.000_000268.000  IR:665张  t_start:008s
+  │  ├ with_cameras_capture_20260509_173327_part001_2026-05-09-17-38-19: 9个segment / 5003张
+  │  │  ├ segment_000_000011.000_000041.000  IR:700张  t_start:000s
+  │  │  ├ segment_001_000044.000_000112.000  IR:1665张  t_start:001s
+  │  │  ├ segment_002_000114.000_000122.000  IR:206张  t_start:002s
+  │  │  ├ segment_003_000142.000_000151.000  IR:227张  t_start:003s
+  │  │  ├ segment_004_000154.000_000195.000  IR:1001张  t_start:004s
+  │  │  ├ segment_005_000202.000_000217.000  IR:362张  t_start:005s
+  │  │  ├ segment_006_000231.000_000239.000  IR:209张  t_start:006s
+  │  │  ├ segment_007_000248.000_000256.000  IR:193张  t_start:007s
+  │  │  ├ segment_008_000260.500_000278.000  IR:440张  t_start:008s
+  │  ├ with_cameras_capture_20260509_173327_part002_2026-05-09-17-43-05: 1个segment / 938张
+  │  │  ├ segment_000_000000.000_000039.000  IR:938张  t_start:000s
+  ├ with_cameras_capture_20260509_180142: 2个part / 12个segment / 7715张
+  │  ├ with_cameras_capture_20260509_180142_part000_2026-05-09-18-01-49: 6个segment / 4498张
+  │  │  ├ segment_000_000040.000_000108.000  IR:1658张  t_start:000s
+  │  │  ├ segment_001_000143.000_000146.000  IR:62张  t_start:001s
+  │  │  ├ segment_002_000152.000_000174.000  IR:524张  t_start:002s
+  │  │  ├ segment_003_000177.000_000223.000  IR:1084张  t_start:003s
+  │  │  ├ segment_004_000225.000_000238.000  IR:314张  t_start:004s
+  │  │  ├ segment_005_000243.000_000279.000  IR:856张  t_start:005s
+  │  ├ with_cameras_capture_20260509_180142_part001_2026-05-09-18-06-35: 6个segment / 3217张
+  │  │  ├ segment_000_000000.000_000016.000  IR:387张  t_start:000s
+  │  │  ├ segment_001_000032.000_000043.000  IR:280张  t_start:001s
+  │  │  ├ segment_002_000044.500_000053.000  IR:192张  t_start:002s
+  │  │  ├ segment_003_000057.000_000132.000  IR:1831张  t_start:003s
+  │  │  ├ segment_004_000164.000_000178.000  IR:358张  t_start:004s
+  │  │  ├ segment_005_000267.500_000274.000  IR:169张  t_start:005s
+  ├ with_cameras_capture_20260509_182059: 1个part / 8个segment / 5331张
+  │  ├ with_cameras_capture_20260509_182059_part000_2026-05-09-18-21-05: 8个segment / 5331张
+  │  │  ├ segment_000_000000.000_000035.000  IR:848张  t_start:000s
+  │  │  ├ segment_001_000056.000_000144.000  IR:2222张  t_start:001s
+  │  │  ├ segment_002_000149.000_000184.000  IR:867张  t_start:002s
+  │  │  ├ segment_003_000186.000_000191.500  IR:145张  t_start:003s
+  │  │  ├ segment_004_000198.000_000203.000  IR:115张  t_start:004s
+  │  │  ├ segment_005_000205.000_000221.000  IR:402张  t_start:005s
+  │  │  ├ segment_006_000224.000_000250.000  IR:631张  t_start:006s
+  │  │  ├ segment_007_000276.500_000280.000  IR:101张  t_start:007s
+
+【6-11导出-缺611night3_new】 7个capture / 18个segment / 64383张IR图
+  ├ with_cameras_capture_20260610_161231: 3个part / 3个segment / 6898张
+  │  ├ with_cameras_capture_20260610_161231_part000_2026-06-10-16-12-37: 1个segment / 6018张
+  │  │  ├ segment_000_000000.000_000254.727  IR:6018张  t_start:000s
+  │  ├ with_cameras_capture_20260610_161231_part001_2026-06-10-16-16-58: 1个segment / 867张
+  │  │  ├ segment_000_000000.000_000285.751  IR:867张  t_start:000s
+  │  ├ with_cameras_capture_20260610_161231_part002_2026-06-10-16-21-51: 1个segment / 13张
+  │  │  ├ segment_000_000000.000_000013.639  IR:13张  t_start:000s
+  ├ with_cameras_capture_20260610_161258: 3个part / 3个segment / 15749张
+  │  ├ with_cameras_capture_20260610_161258_part000_2026-06-10-16-13-04: 1个segment / 6392张
+  │  │  ├ segment_000_000000.000_000252.535  IR:6392张  t_start:000s
+  │  ├ with_cameras_capture_20260610_161258_part001_2026-06-10-16-17-23: 1个segment / 6345张
+  │  │  ├ segment_000_000000.000_000252.646  IR:6345张  t_start:000s
+  │  ├ with_cameras_capture_20260610_161258_part002_2026-06-10-16-21-43: 1个segment / 3012张
+  │  │  ├ segment_000_000000.000_000121.558  IR:3012张  t_start:000s
+  ├ with_cameras_capture_20260610_161405: 2个part / 2个segment / 3788张
+  │  ├ with_cameras_capture_20260610_161405_part000_2026-06-10-16-14-11: 1个segment / 3520张
+  │  │  ├ segment_000_000000.000_000269.705  IR:3520张  t_start:000s
+  │  ├ with_cameras_capture_20260610_161405_part001_2026-06-10-16-18-48: 1个segment / 268张
+  │  │  ├ segment_000_000000.000_000270.703  IR:268张  t_start:000s
+  ├ with_cameras_capture_20260610_161407: 1个part / 1个segment / 2088张
+  │  ├ with_cameras_capture_20260610_161407_part000_2026-06-10-16-14-13: 1个segment / 2088张
+  │  │  ├ segment_000_000000.000_000091.409  IR:2088张  t_start:000s
+  ├ with_cameras_capture_20260610_163951: 3个part / 3个segment / 15022张
+  │  ├ with_cameras_capture_20260610_163951_part000_2026-06-10-16-39-57: 1个segment / 5942张
+  │  │  ├ segment_000_000000.000_000255.700  IR:5942张  t_start:000s
+  │  ├ with_cameras_capture_20260610_163951_part001_2026-06-10-16-44-19: 1个segment / 5700张
+  │  │  ├ segment_000_000000.000_000256.730  IR:5700张  t_start:000s
+  │  ├ with_cameras_capture_20260610_163951_part002_2026-06-10-16-48-43: 1个segment / 3380张
+  │  │  ├ segment_000_000000.000_000156.760  IR:3380张  t_start:000s
+  ├ with_cameras_capture_20260610_164229: 3个part / 3个segment / 5323张
+  │  ├ with_cameras_capture_20260610_164229_part000_2026-06-10-16-42-36: 1个segment / 2697张
+  │  │  ├ segment_000_000000.000_000285.647  IR:2697张  t_start:000s
+  │  ├ with_cameras_capture_20260610_164229_part001_2026-06-10-16-47-29: 1个segment / 2620张
+  │  │  ├ segment_000_000000.000_000286.956  IR:2620张  t_start:000s
+  │  ├ with_cameras_capture_20260610_164229_part002_2026-06-10-16-52-23: 1个segment / 6张
+  │  │  ├ segment_000_000000.000_000001.815  IR:6张  t_start:000s
+  ├ with_cameras_capture_20260610_184215: 3个part / 3个segment / 15515张
+  │  ├ with_cameras_capture_20260610_184215_part000_2026-06-10-18-42-21: 1个segment / 6292张
+  │  │  ├ segment_000_000000.000_000252.555  IR:6292张  t_start:000s
+  │  ├ with_cameras_capture_20260610_184215_part001_2026-06-10-18-46-41: 1个segment / 6045张
+  │  │  ├ segment_000_000000.000_000255.687  IR:6045张  t_start:000s
+  │  ├ with_cameras_capture_20260610_184215_part002_2026-06-10-18-51-03: 1个segment / 3178张
+  │  │  ├ segment_000_000000.000_000136.675  IR:3178张  t_start:000s
+
+【6-12_export】 4个capture / 10个segment / 50472张IR图
+  ├ with_cameras_capture_20260612_120246(3): 3个part / 3个segment / 13164张
+  │  ├ with_cameras_capture_20260612_120246_part000_2026-06-12-12-02-52: 1个segment / 6006张
+  │  │  ├ segment_000_000000.000_000254.608  IR:6006张  t_start:000s
+  │  ├ with_cameras_capture_20260612_120246_part001_2026-06-12-12-07-13: 1个segment / 5877张
+  │  │  ├ segment_000_000000.000_000255.906  IR:5877张  t_start:000s
+  │  ├ with_cameras_capture_20260612_120246_part002_2026-06-12-12-11-36: 1个segment / 1281张
+  │  │  ├ segment_000_000000.000_000058.936  IR:1281张  t_start:000s
+  ├ with_cameras_capture_20260612_120324(1): 2个part / 2个segment / 9802张
+  │  ├ with_cameras_capture_20260612_120324_part000_2026-06-12-12-03-30: 1个segment / 5989张
+  │  │  ├ segment_000_000000.000_000255.563  IR:5989张  t_start:000s
+  │  ├ with_cameras_capture_20260612_120324_part001_2026-06-12-12-07-53: 1个segment / 3813张
+  │  │  ├ segment_000_000000.000_000171.050  IR:3813张  t_start:000s
+  ├ with_cameras_capture_20260612_120341(2): 2个part / 2个segment / 11120张
+  │  ├ with_cameras_capture_20260612_120341_part000_2026-06-12-12-03-47: 1个segment / 6227张
+  │  │  ├ segment_000_000000.000_000253.627  IR:6227张  t_start:000s
+  │  ├ with_cameras_capture_20260612_120341_part001_2026-06-12-12-08-08: 1个segment / 4893张
+  │  │  ├ segment_000_000000.000_000206.505  IR:4893张  t_start:000s
+  ├ with_cameras_capture_20260612_132808(4): 3个part / 3个segment / 16386张
+  │  ├ with_cameras_capture_20260612_132808_part000_2026-06-12-13-28-15: 1个segment / 6519张
+  │  │  ├ segment_000_000000.000_000252.411  IR:6519张  t_start:000s
+  │  ├ with_cameras_capture_20260612_132808_part001_2026-06-12-13-32-34: 1个segment / 6289张
+  │  │  ├ segment_000_000000.000_000253.666  IR:6289张  t_start:000s
+  │  ├ with_cameras_capture_20260612_132808_part002_2026-06-12-13-36-54: 1个segment / 3578张
+  │  │  ├ segment_000_000000.000_000141.726  IR:3578张  t_start:000s
+
+【6_5】 7个capture / 15个segment / 78219张IR图
+  ├ with_cameras_capture_20260605_103857: 1个part / 1个segment / 19570张
+  │  ├ with_cameras_capture_20260605_103857_part000_2026-06-05-10-39-04: 1个segment / 19570张
+  │  │  ├ segment_000_000000.000_000753.737  IR:19570张  t_start:000s
+  ├ with_cameras_capture_20260605_104107: 1个part / 1个segment / 18013张
+  │  ├ with_cameras_capture_20260605_104107_part000_2026-06-05-10-41-14: 1个segment / 18013张
+  │  │  ├ segment_000_000000.000_000678.195  IR:18013张  t_start:000s
+  ├ with_cameras_capture_20260606_150749: 2个part / 2个segment / 3110张
+  │  ├ with_cameras_capture_20260606_150749_part000_2026-06-06-15-07-56: 1个segment / 2899张
+  │  │  ├ segment_000_000000.000_000231.693  IR:2899张  t_start:000s
+  │  ├ with_cameras_capture_20260606_150749_part001_2026-06-06-15-11-54: 1个segment / 211张
+  │  │  ├ segment_000_000000.000_000017.219  IR:211张  t_start:000s
+  ├ with_cameras_capture_20260606_151623: 3个part / 3个segment / 9316张
+  │  ├ with_cameras_capture_20260606_151623_part000_2026-06-06-15-16-30: 1个segment / 4474张
+  │  │  ├ segment_000_000000.000_000219.936  IR:4474张  t_start:000s
+  │  ├ with_cameras_capture_20260606_151623_part001_2026-06-06-15-20-16: 1个segment / 4183张
+  │  │  ├ segment_000_000000.000_000224.277  IR:4183张  t_start:000s
+  │  ├ with_cameras_capture_20260606_151623_part002_2026-06-06-15-24-07: 1个segment / 659张
+  │  │  ├ segment_000_000000.000_000033.748  IR:659张  t_start:000s
+  ├ with_cameras_capture_20260606_153629: 2个part / 2个segment / 7081张
+  │  ├ with_cameras_capture_20260606_153629_part000_2026-06-06-15-36-40: 1个segment / 3616张
+  │  │  ├ segment_000_000000.000_000232.557  IR:3616张  t_start:000s
+  │  ├ with_cameras_capture_20260606_153629_part001_2026-06-06-15-40-40: 1个segment / 3465张
+  │  │  ├ segment_000_000000.000_000241.530  IR:3465张  t_start:000s
+  ├ with_cameras_capture_20260606_182724: 3个part / 3个segment / 11424张
+  │  ├ with_cameras_capture_20260606_182724_part000_2026-06-06-18-27-30: 1个segment / 4532张
+  │  │  ├ segment_000_000000.000_000218.972  IR:4532张  t_start:000s
+  │  ├ with_cameras_capture_20260606_182724_part001_2026-06-06-18-31-16: 1个segment / 4385张
+  │  │  ├ segment_000_000000.000_000218.871  IR:4385张  t_start:000s
+  │  ├ with_cameras_capture_20260606_182724_part002_2026-06-06-18-35-01: 1个segment / 2507张
+  │  │  ├ segment_000_000000.000_000125.128  IR:2507张  t_start:000s
+  ├ with_cameras_capture_20260606_183126: 3个part / 3个segment / 9705张
+  │  ├ with_cameras_capture_20260606_183126_part000_2026-06-06-18-31-32: 1个segment / 4559张
+  │  │  ├ segment_000_000000.000_000220.700  IR:4559张  t_start:000s
+  │  ├ with_cameras_capture_20260606_183126_part001_2026-06-06-18-35-19: 1个segment / 4693张
+  │  │  ├ segment_000_000000.000_000221.902  IR:4693张  t_start:000s
+  │  ├ with_cameras_capture_20260606_183126_part002_2026-06-06-18-39-08: 1个segment / 453张
+  │  │  ├ segment_000_000000.000_000022.280  IR:453张  t_start:000s
+
+【6_8】 10个capture / 17个segment / 92350张IR图
+  ├ with_cameras_capture_20260608_125137: 2个part / 2个segment / 10283张
+  │  ├ with_cameras_capture_20260608_125137_part000_2026-06-08-12-51-49: 1个segment / 5066张
+  │  │  ├ segment_000_000000.000_000261.203  IR:5066张  t_start:000s
+  │  ├ with_cameras_capture_20260608_125137_part001_2026-06-08-12-56-16: 1个segment / 5217张
+  │  │  ├ segment_000_000000.000_000267.500  IR:5217张  t_start:000s
+  ├ with_cameras_capture_20260608_130656: 1个part / 1个segment / 2218张
+  │  ├ with_cameras_capture_20260608_130656_part000_2026-06-08-13-07-03: 1个segment / 2218张
+  │  │  ├ segment_000_000000.000_000280.631  IR:2218张  t_start:000s
+  ├ with_cameras_capture_20260608_143004: 1个part / 1个segment / 3139张
+  │  ├ with_cameras_capture_20260608_143004_part000_2026-06-08-14-30-10: 1个segment / 3139张
+  │  │  ├ segment_000_000000.000_000136.416  IR:3139张  t_start:000s
+  ├ with_cameras_capture_20260608_145606: 2个part / 2个segment / 14439张
+  │  ├ with_cameras_capture_20260608_145606_part000_2026-06-08-14-56-12: 1个segment / 9103张
+  │  │  ├ segment_000_000000.000_000327.112  IR:9103张  t_start:000s
+  │  ├ with_cameras_capture_20260608_145606_part001_2026-06-08-15-01-46: 1个segment / 5336张
+  │  │  ├ segment_000_000000.000_000193.968  IR:5336张  t_start:000s
+  ├ with_cameras_capture_20260608_151448: 1个part / 1个segment / 9203张
+  │  ├ with_cameras_capture_20260608_151448_part000_2026-06-08-15-14-55: 1个segment / 9203张
+  │  │  ├ segment_000_000000.000_000328.063  IR:9203张  t_start:000s
+  ├ with_cameras_capture_20260608_152116: 2个part / 2个segment / 11508张
+  │  ├ with_cameras_capture_20260608_152116_part000_2026-06-08-15-21-28: 1个segment / 9028张
+  │  │  ├ segment_000_000000.000_000334.029  IR:9028张  t_start:000s
+  │  ├ with_cameras_capture_20260608_152116_part001_2026-06-08-15-27-09: 1个segment / 2480张
+  │  │  ├ segment_000_000000.000_000099.886  IR:2480张  t_start:000s
+  ├ with_cameras_capture_20260608_161851: 2个part / 2个segment / 12207张
+  │  ├ with_cameras_capture_20260608_161851_part000_2026-06-08-16-18-57: 1个segment / 9245张
+  │  │  ├ segment_000_000000.000_000332.141  IR:9245张  t_start:000s
+  │  ├ with_cameras_capture_20260608_161851_part001_2026-06-08-16-24-36: 1个segment / 2962张
+  │  │  ├ segment_000_000000.000_000107.433  IR:2962张  t_start:000s
+  ├ with_cameras_capture_20260608_162452: 2个part / 2个segment / 11057张
+  │  ├ with_cameras_capture_20260608_162452_part000_2026-06-08-16-24-58: 1个segment / 9134张
+  │  │  ├ segment_000_000000.000_000329.179  IR:9134张  t_start:000s
+  │  ├ with_cameras_capture_20260608_162452_part001_2026-06-08-16-30-34: 1个segment / 1923张
+  │  │  ├ segment_000_000000.000_000075.397  IR:1923张  t_start:000s
+  ├ with_cameras_capture_20260608_174907: 2个part / 2个segment / 16129张
+  │  ├ with_cameras_capture_20260608_174907_part000_2026-06-08-17-49-14: 1个segment / 9167张
+  │  │  ├ segment_000_000000.000_000329.031  IR:9167张  t_start:000s
+  │  ├ with_cameras_capture_20260608_174907_part001_2026-06-08-17-54-50: 1个segment / 6962张
+  │  │  ├ segment_000_000000.000_000251.386  IR:6962张  t_start:000s
+  ├ with_cameras_capture_20260608_174950: 2个part / 2个segment / 2167张
+  │  ├ with_cameras_capture_20260608_174950_part000_2026-06-08-17-49-57: 1个segment / 1997张
+  │  │  ├ segment_000_000000.000_000385.314  IR:1997张  t_start:000s
+  │  ├ with_cameras_capture_20260608_174950_part001_2026-06-08-17-56-29: 1个segment / 170张
+  │  │  ├ segment_000_000000.000_000171.475  IR:170张  t_start:000s
+

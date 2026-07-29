@@ -19,12 +19,14 @@ export const useUserStore = defineStore('user', {
           { path: '/data', icon: '📦', label: '数据浏览' },
           { path: '/market', icon: '📊', label: '数据集市场' },
           { path: '/mydatasets', icon: '📁', label: '我的数据集' },
+          { path: '/annotate', icon: '🖊️', label: '数据标注' },
           { path: '/models', icon: '🧠', label: '我的模型' },
           { path: '/eval', icon: '🏆', label: '评测' },
           { path: '/profile', icon: '👤', label: '个人中心' },
         ],
         reviewer: [
           { path: '/review/datasets', icon: '✅', label: '数据集审核' },
+          { path: '/annotate', icon: '🖊️', label: '数据标注' },
         ],
         admin: [
           { path: '/admin/users', icon: '👥', label: '用户管理' },

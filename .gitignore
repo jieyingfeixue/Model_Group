@@ -10,12 +10,25 @@ __pycache__/
 .env.*
 !.env.example
 
-# 本地采集原始数据，勿入库
+# 本地采集原始数据 / 外部标注，勿入库
 with_cameras_capture_*/
 label_with_cameras_capture_*/
+label_with_annotation_and_depth/
 
-# 队友独立标注工具（含 .venv / 大模型权重），暂不入库
-Auto-labeling-LH/
+# Auto-labeling-LH：入库源码，排除环境/权重/缓存
+Auto-labeling-LH/.venv/
+Auto-labeling-LH/**/.venv/
+Auto-labeling-LH/models/
+Auto-labeling-LH/temp/
+Auto-labeling-LH/sessions/
+Auto-labeling-LH/outputs/
+Auto-labeling-LH/**/*.egg-info/
+Auto-labeling-LH/**/*.pt
+Auto-labeling-LH/**/*.pth
+Auto-labeling-LH/**/*.onnx
+Auto-labeling-LH/**/*.ckpt
+Auto-labeling-LH/._*
+Auto-labeling-LH/**/__pycache__/
 
 # 临时探测/调试产物
 scripts/_probe_*.py

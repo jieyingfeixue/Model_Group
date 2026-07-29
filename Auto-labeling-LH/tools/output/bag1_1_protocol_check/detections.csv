@@ -1,0 +1,1 @@
+﻿ant_frame_index,packet_index,net_send_frame,timestamp_hmsm,category,object_index,ref_longitude_deg,ref_latitude_deg,ref_heading_deg,ref_altitude_m,position_x_m,position_y_m,position_z_m,bbox_min_x_m,bbox_min_y_m,bbox_min_z_m,bbox_max_x_m,bbox_max_y_m,bbox_max_z_m,world_latitude_deg,world_longitude_deg,world_altitude_m,details_json

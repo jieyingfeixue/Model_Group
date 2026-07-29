@@ -1,0 +1,14 @@
+{
+  "source_bin": "D:\\Dataset\\LH_2026-04-27\\bag1.1\\with_cameras_capture_20260427_151113_mmwave_udp.bin",
+  "complete_antenna_frames": 95,
+  "total_objects": 3792,
+  "category_counts": {
+    "isolated_object": 1054,
+    "dense_region": 60,
+    "powerline_segment": 2678
+  },
+  "sample_rows": 15,
+  "sample_per_category": 5,
+  "coordinate_mode": "nwu",
+  "axis_definition": "X=north, Y=west, Z=up"
+}

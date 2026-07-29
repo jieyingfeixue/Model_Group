@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test</title>
+<style>body{background:#111;color:#fff;font:16px sans-serif;padding:20px}</style>
+</head><body>
+<h1>连接测试 OK</h1>
+<p id="t"></p>
+<p id="api"></p>
+<script>
+document.getElementById('t').textContent='JS执行 OK - '+new Date().toISOString();
+fetch('/api/browse/tree?root='+encodeURIComponent('/data1/LHO/nas/LH_Dataset/LH_data_all_sensor'))
+  .then(r=>r.json())
+  .then(d=>document.getElementById('api').textContent='API OK: '+d.tree.length+' 日期')
+  .catch(e=>document.getElementById('api').textContent='API失败: '+e.message);
+</script>
+</body></html>
