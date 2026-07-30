@@ -21,6 +21,22 @@ export async function getDataList(params) {
   return request.get('/data', { params: apiParams })
 }
 
+/** 按样本分页：GET /api/data/samples — 每页只返回当前页样本 */
+export async function getSampleList(params) {
+  const apiParams = {
+    page: params.page || 1,
+    size: params.page_size || params.size || 12,
+  }
+  const filterFields = ['modality', 'scene', 'weather', 'time_of_day', 'terrain', 'obstacle',
+    'annotation_status', 'status', 'batch_id', 'sample_group']
+  filterFields.forEach(f => {
+    if (params[f] !== undefined && params[f] !== '' && params[f] !== null) {
+      apiParams[f] = params[f]
+    }
+  })
+  return request.get('/data/samples', { params: apiParams })
+}
+
 export async function getDataDetail(id) {
   // 后端: GET /api/data/{resource_id}
   return request.get(`/data/${id}`)

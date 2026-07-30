@@ -92,17 +92,9 @@ class DataResource(Base):
         return resources, total
 
     @classmethod
-    def search(
-        cls,
-        db: Session,
-        filters: dict[str, Any] | None = None,
-        page: int = 1,
-        size: int = 20,
-    ) -> tuple[list[DataResource], int]:
-        """多条件组合查询，返回 (资源列表, 总数)"""
-        query = db.query(cls)
+    def _apply_search_filters(cls, query, filters: dict[str, Any] | None):
+        """给资源查询挂上与 search() 相同的筛选条件。"""
         filters = filters or {}
-
         if owner_id := filters.get("owner_id"):
             query = query.filter(cls.owner_id == owner_id)
         if modality := filters.get("modality"):
@@ -125,6 +117,18 @@ class DataResource(Base):
             query = query.filter(cls.meta_info["sample_group"].astext == str(sample_group))
         if batch_id := filters.get("batch_id"):
             query = query.filter(cls.meta_info["batch_id"].astext == batch_id)
+        return query
+
+    @classmethod
+    def search(
+        cls,
+        db: Session,
+        filters: dict[str, Any] | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> tuple[list[DataResource], int]:
+        """多条件组合查询，返回 (资源列表, 总数)"""
+        query = cls._apply_search_filters(db.query(cls), filters)
 
         total = query.count()
         resources = (
@@ -134,6 +138,129 @@ class DataResource(Base):
             .all()
         )
         return resources, total
+
+    @classmethod
+    def search_samples(
+        cls,
+        db: Session,
+        filters: dict[str, Any] | None = None,
+        page: int = 1,
+        size: int = 12,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """按 batch_id + sample_group 分页返回样本（每页只取当前页资源）。
+
+        返回 (samples, total_sample_count)。每个 sample:
+        {
+          sample_id, group_no, batch_id, scene, weather, time_of_day, terrain, obstacle,
+          modality_count, images: [{resource_id, modality, name, sensor, annotation_status}]
+        }
+        """
+        from sqlalchemy import and_, case, cast, func, or_
+        from sqlalchemy.sql.sqltypes import Integer
+
+        batch_col = cls.meta_info["batch_id"].astext
+        sg_col = cls.meta_info["sample_group"].astext
+
+        # 1) 筛出有 sample_group 的资源，聚合成样本键
+        base = cls._apply_search_filters(db.query(cls), filters)
+        base = base.filter(sg_col.isnot(None), sg_col != "")
+
+        sg_num = case(
+            (sg_col.op("~")("^[0-9]+$"), cast(sg_col, Integer)),
+            else_=10**9,
+        )
+
+        grouped = base.with_entities(
+            batch_col.label("batch_id"),
+            sg_col.label("sample_group"),
+        ).group_by(batch_col, sg_col)
+
+        total = (
+            db.query(func.count()).select_from(grouped.subquery()).scalar() or 0
+        )
+        if total == 0:
+            return [], 0
+
+        page_keys = (
+            grouped.order_by(sg_num.asc(), batch_col.asc())
+            .offset((page - 1) * size)
+            .limit(size)
+            .all()
+        )
+        if not page_keys:
+            return [], total
+
+        # 2) 只拉当前页样本的全部资源（卡片需要完整多模态）
+        conds = []
+        for batch_id, sample_group in page_keys:
+            if batch_id:
+                batch_match = batch_col == batch_id
+            else:
+                batch_match = or_(batch_col.is_(None), batch_col == "")
+            conds.append(and_(batch_match, sg_col == str(sample_group)))
+        resources = (
+            db.query(cls)
+            .filter(or_(*conds))
+            .order_by(cls.resource_id.asc())
+            .all()
+        )
+
+        # 3) 按页键顺序组装
+        group_map: dict[str, dict[str, Any]] = {}
+        order_keys = [f"{(b or 'unknown')}::{sg}" for b, sg in page_keys]
+        for key in order_keys:
+            batch_id, _, sg = key.partition("::")
+            group_map[key] = {
+                "sample_id": key,
+                "group_no": sg,
+                "batch_id": "" if batch_id == "unknown" else batch_id,
+                "scene": "-",
+                "weather": None,
+                "time_of_day": None,
+                "terrain": None,
+                "obstacle": None,
+                "modality_count": 0,
+                "images": [],
+                "_seen_resource": set(),
+                "_seen_sensor": set(),
+            }
+
+        for r in resources:
+            meta = r.meta_info if isinstance(r.meta_info, dict) else {}
+            gid = f"{meta.get('batch_id') or 'unknown'}::{meta.get('sample_group')}"
+            g = group_map.get(gid)
+            if not g:
+                continue
+            if r.resource_id in g["_seen_resource"]:
+                continue
+            sensor_key = meta.get("sensor") or f"{r.modality}:{r.name}"
+            if sensor_key in g["_seen_sensor"]:
+                continue
+            g["_seen_resource"].add(r.resource_id)
+            g["_seen_sensor"].add(sensor_key)
+            if g["scene"] in (None, "-") and meta.get("scene"):
+                g["scene"] = meta.get("scene")
+            for field in ("weather", "time_of_day", "terrain", "obstacle"):
+                if g[field] is None and meta.get(field) is not None:
+                    g[field] = meta.get(field)
+            g["images"].append(
+                {
+                    "resource_id": r.resource_id,
+                    "modality": r.modality,
+                    "name": r.name,
+                    "sensor": meta.get("sensor") or "",
+                    "annotation_status": r.annotation_status,
+                }
+            )
+
+        samples: list[dict[str, Any]] = []
+        for key in order_keys:
+            g = group_map[key]
+            g.pop("_seen_resource", None)
+            g.pop("_seen_sensor", None)
+            g["modality_count"] = len({img["modality"] for img in g["images"]})
+            samples.append(g)
+        return samples, int(total)
 
     @staticmethod
     def update_metadata(

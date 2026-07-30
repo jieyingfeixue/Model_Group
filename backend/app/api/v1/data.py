@@ -142,6 +142,79 @@ def list_data(
     }
 
 
+@router.get("/data/samples", response_model=dict[str, Any])
+def list_data_samples(
+    modality: str | None = Query(None),
+    annotation_status: str | None = Query(None),
+    status: str | None = Query(None),
+    scene: str | None = Query(None),
+    weather: str | None = Query(None),
+    time_of_day: str | None = Query(None),
+    terrain: str | None = Query(None),
+    obstacle: str | None = Query(None),
+    batch_id: str | None = Query(None),
+    sample_group: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(12, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """按样本（batch_id + sample_group）分页浏览。
+
+    只返回当前页样本及其资源，避免前端一次拉全库再分组。
+    """
+    filters: dict[str, Any] = {}
+    if modality:
+        filters["modality"] = modality
+    if annotation_status:
+        filters["annotation_status"] = annotation_status
+    if status:
+        filters["status"] = status
+    if scene:
+        filters["scene"] = scene
+    if weather:
+        filters["weather"] = weather
+    if time_of_day:
+        filters["time_of_day"] = time_of_day
+    if terrain:
+        filters["terrain"] = terrain
+    if obstacle:
+        filters["obstacle"] = obstacle
+    if batch_id:
+        filters["batch_id"] = batch_id
+    if sample_group is not None:
+        filters["sample_group"] = sample_group
+
+    samples, total = DataResource.search_samples(
+        db, filters=filters, page=page, size=size
+    )
+
+    from app.utils.external_labels import has_external_annotation
+
+    for sample in samples:
+        for img in sample.get("images") or []:
+            if img.get("modality") != "visible":
+                continue
+            if img.get("annotation_status") == "annotated":
+                continue
+            if has_external_annotation(
+                name=img.get("name") or "",
+                modality="visible",
+                meta_info={
+                    "sensor": img.get("sensor") or "",
+                    "batch_id": sample.get("batch_id") or "",
+                    "sample_group": sample.get("group_no"),
+                },
+            ):
+                img["annotation_status"] = "annotated"
+
+    return {
+        "items": samples,
+        "total": total,
+        "page": page,
+        "size": size,
+    }
+
+
 @router.get("/images/{resource_id}")
 def get_image(resource_id: int, db: Session = Depends(get_db)):
     """返回图片；激光雷达 PCD→BEV，毫米波 MAT→距离-方位热力图。"""
