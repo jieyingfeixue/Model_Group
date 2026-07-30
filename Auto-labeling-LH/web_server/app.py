@@ -207,6 +207,7 @@ def main():
     """Entry point: uvicorn web_server.app:app --host 0.0.0.0 --port 8080"""
     import uvicorn
     logger.info("Starting Auto-Labeling Web API on %s:%s", HOST, PORT)
+    logger.info("DATASET_ROOT = %s (exists=%s)", DATASET_ROOT, DATASET_ROOT.exists())
     uvicorn.run("web_server.app:app", host=HOST, port=PORT, reload=False)
 
 

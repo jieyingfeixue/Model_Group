@@ -53,12 +53,17 @@
     </div>
     <div class="card">
       <h3>🚀 启动标注服务</h3>
-      <p class="hint">在仓库根目录执行（需已安装该工具依赖）：</p>
-      <pre>cd Auto-labeling-LH
+      <p class="hint">本地联调（推荐，自动指向仓库里的 with_cameras_capture_*）：</p>
+      <pre>powershell -ExecutionPolicy Bypass -File scripts/start_lh_local.ps1</pre>
+      <p class="hint">或手动指定数据根后启动：</p>
+      <pre>$env:LH_DATASET_ROOT="E:\学校有关\暑期岗位实习\Model_Group-main"
+cd Auto-labeling-LH
 python -m web_server.app</pre>
-      <p class="hint">或：</p>
-      <pre>cd Auto-labeling-LH
-uvicorn web_server.app:app --host 0.0.0.0 --port 8080</pre>
+      <p class="hint">
+        注意：不要指到 <code>E:\robot</code>（里面没有 LH 采集结构）。
+        标注结果写到仓库根的 <code>label_with_annotation_and_depth/</code>；
+        已有 LabelMe 在 <code>label_with_cameras_capture_*</code> 也可被平台回显。
+      </p>
       <p class="hint">
         跳转地址可用前端环境变量 <code>VITE_LH_ANNOTATE_URL</code> 配置
         （见 <code>frontend/.env.example</code>）。

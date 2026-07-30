@@ -77,9 +77,48 @@ def _dataset_root(root: str | Path) -> Path:
     return requested
 
 
+def _os_path(path: Path | str) -> str:
+    """Windows-safe absolute path (supports >260 chars via \\\\?\\ prefix)."""
+    p = os.path.abspath(str(path))
+    if os.name != "nt":
+        return p
+    if p.startswith("\\\\?\\"):
+        return p
+    if p.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + p.lstrip("\\")
+    return "\\\\?\\" + p
+
+
+def _path_exists(path: Path | str) -> bool:
+    try:
+        if Path(path).exists():
+            return True
+    except OSError:
+        pass
+    return os.path.exists(_os_path(path))
+
+
+def _read_file_bytes(path: Path | str) -> bytes:
+    with open(_os_path(path), "rb") as fh:
+        return fh.read()
+
+
 def _safe_join(root: Path, *parts: str) -> Path:
-    """Join user-supplied relative paths without allowing ``..`` escape."""
-    candidate = root.joinpath(*parts).resolve()
+    """Join user-supplied relative paths without allowing ``..`` escape.
+
+    Local flat layout may expose a virtual top folder named ``local`` that does
+    not exist on disk (repo root holds with_cameras_* directly). Strip it.
+    """
+    cleaned: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        cleaned.extend(Path(part).parts)
+    if cleaned and cleaned[0] == "local":
+        virtual = root / "local"
+        if not virtual.exists():
+            cleaned = cleaned[1:]
+    candidate = root.joinpath(*cleaned).resolve() if cleaned else root.resolve()
     if not candidate.is_relative_to(root.resolve()):
         raise HTTPException(status_code=400, detail="Path escapes the allowed root")
     return candidate
@@ -89,6 +128,10 @@ def _safe_session_path(relative: str) -> Path:
     path = Path(relative)
     if path.is_absolute() or ".." in path.parts:
         raise HTTPException(status_code=400, detail="Invalid relative path")
+    # Mirror virtual ``local`` prefix used by the flat local tree.
+    if path.parts and path.parts[0] == "local":
+        if not (DATASET_ROOT / "local").exists():
+            path = Path(*path.parts[1:]) if len(path.parts) > 1 else Path(".")
     return path
 
 
@@ -97,7 +140,13 @@ def _resolve_cam_dir(cam: str) -> str:
 
 
 def _build_tree(root: str) -> list[dict]:
-    """Walk only dataset directories; image files are listed on demand."""
+    """Walk only dataset directories; image files are listed on demand.
+
+    Supports:
+    1) Server layout:  date/with_cameras_*/part*/segment_*/images/...
+    2) Local flat:     with_cameras_*/part*/segment_*/images/...  (repo root)
+    3) Shim layout:    local_dataset/0_local/with_cameras_*/...
+    """
     root_path = Path(root)
     if not root_path.exists():
         return []
@@ -109,19 +158,44 @@ def _build_tree(root: str) -> list[dict]:
     except OSError:
         return tree
 
+    # ── Local flat: root 下直接是 with_cameras_capture_* ──
+    # 树里用虚拟日期节点 ``local``；读文件时由 _safe_join 去掉该前缀。
+    direct_caps = [
+        e for e in entries
+        if e.is_dir()
+        and e.name.startswith("with_cameras")
+        and "_converted" not in e.name
+    ]
+    if direct_caps:
+        date_node: dict = {"n": "local", "c": 0, "k": []}
+        for ce in direct_caps:
+            cap_node: dict = {"n": ce.name, "c": 0}
+            _walk_parts_fast(Path(ce.path), cap_node)
+            if cap_node["c"] > 0:
+                date_node["k"].append(cap_node)
+                date_node["c"] += cap_node["c"]
+        if date_node["c"] > 0:
+            return [date_node]
+
+    # ── Classic server / shim layout: date dirs ──
     for de in entries:
         if not de.is_dir():
             continue
         name = de.name
-        # Filter date-like directories, skip non-data dirs
         if name.startswith('.') or name == '__pycache__':
             continue
         if not any(c.isdigit() for c in name):
             continue
         if any(kw in name.lower() for kw in ('extract', 'train', '山地')):
             continue
-        # For 6-11 export dirs, only show the _new version
         if '6-11导出' in name and not name.endswith('_new'):
+            continue
+        if name.lower() in {
+            'auto-labeling-lh', 'backend', 'frontend', 'scripts', 'docs',
+            'data', 'node_modules', '.git',
+        }:
+            continue
+        if name.startswith('label_'):
             continue
 
         date_node = {"n": name, "c": 0}
@@ -302,29 +376,34 @@ def serve_image(
     root_path = _dataset_root(root)
     file_path = _safe_join(root_path, path)
 
-    if not file_path.exists():
+    if not _path_exists(file_path):
         raise HTTPException(status_code=404, detail=f"Not found: {path}")
 
-    if thumb:
-        import io, cv2
-        img = cv2.imread(str(file_path))
-        if img is None:
-            raise HTTPException(status_code=500, detail="Failed to read image")
-        h, w = img.shape[:2]
-        scale = min(320 / w, 240 / h)
-        thumb_img = cv2.resize(
-            img, (max(1, int(w * scale)), max(1, int(h * scale))),
-            interpolation=cv2.INTER_AREA,
-        )
-        _, buf = cv2.imencode('.jpg', thumb_img)
-        return Response(content=buf.tobytes(), media_type="image/jpeg")
+    os_path = _os_path(file_path)
+    suffix = Path(os_path).suffix.lower()
+    media_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".bmp": "image/bmp",
+    }
+    media = media_map.get(suffix, "application/octet-stream")
 
-    suffix = file_path.suffix.lower()
-    media_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-                 '.png': 'image/png', '.bmp': 'image/bmp'}
-    return FileResponse(
-        file_path,
-        media_type=media_map.get(suffix, 'application/octet-stream'),
+    if thumb:
+        import io
+        from PIL import Image
+
+        with Image.open(os_path) as img:
+            img = img.convert("RGB")
+            img.thumbnail((320, 240))
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            return Response(content=buf.getvalue(), media_type="image/jpeg")
+
+    # Avoid FileResponse/MAX_PATH issues on Windows long nested capture paths.
+    return Response(
+        content=_read_file_bytes(file_path),
+        media_type=media,
         headers={"Cache-Control": "public, max-age=86400"},
     )
 
@@ -2470,13 +2549,13 @@ async def detect_features(req: DetectFeaturesRequest):
         image_path = _safe_join(
             root_path, req.seg_path, "images", CAMERA_DIRS[camera], image_file
         )
-        if not image_path.is_file():
+        if not _path_exists(image_path):
             raise HTTPException(status_code=404, detail=f"Image not found: {image_file}")
 
         try:
             from PIL import Image
 
-            with Image.open(image_path) as source_image:
+            with Image.open(_os_path(image_path)) as source_image:
                 images[camera] = source_image.convert("RGB")
             image_files[camera] = image_file
         except Exception as exc:
@@ -2661,12 +2740,12 @@ async def update_feature_annotations(req: UpdateFeatureAnnotationsRequest):
     image_path = _safe_join(
         root_path, req.seg_path, "images", CAMERA_DIRS[req.camera], req.image_file
     )
-    if not image_path.is_file():
+    if not _path_exists(image_path):
         raise HTTPException(status_code=404, detail=f"Image not found: {req.image_file}")
 
     from PIL import Image
 
-    with Image.open(image_path) as image:
+    with Image.open(_os_path(image_path)) as image:
         image_width, image_height = image.size
 
     detections: list[dict] = []

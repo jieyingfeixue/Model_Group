@@ -8,6 +8,30 @@ from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = PROJECT_ROOT.parent
+
+
+def _resolve_dataset_root() -> Path:
+    """Prefer LH_DATASET_ROOT; else NAS path; else local repo capture folders."""
+    env = os.environ.get("LH_DATASET_ROOT", "").strip()
+    if env:
+        return Path(env).expanduser()
+
+    nas = Path("/data1/LHO/nas/LH_Dataset/LH_data_all_sensor")
+    if nas.exists():
+        return nas
+
+    # 本地联调：仓库根下已有 with_cameras_capture_*
+    # 注意：不要指到 E:\\robot，那里没有 LH 采集目录结构
+    if any(REPO_ROOT.glob("with_cameras_capture_*")):
+        return REPO_ROOT
+
+    local_bundle = PROJECT_ROOT / "local_dataset"
+    if local_bundle.exists():
+        return local_bundle
+
+    return nas
+
 
 # Server host/port
 HOST = os.environ.get("WEB_HOST", "0.0.0.0")
@@ -16,11 +40,7 @@ PORT = int(os.environ.get("WEB_PORT", "8080"))
 # CORS origins (comma-separated)
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",")
 
-# Offline deployment paths.  They may be overridden without changing code,
-# but default to the existing server layout documented for this project.
-DATASET_ROOT = Path(os.environ.get(
-    "LH_DATASET_ROOT", "/data1/LHO/nas/LH_Dataset/LH_data_all_sensor"
-)).expanduser()
+DATASET_ROOT = _resolve_dataset_root()
 SAM3_SOURCE_ROOT = Path(os.environ.get(
     "SAM3_SOURCE_ROOT", str(PROJECT_ROOT.parent / "sam3-main")
 )).expanduser()
