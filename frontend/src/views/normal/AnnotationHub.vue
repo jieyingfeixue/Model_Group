@@ -1,12 +1,29 @@
 <template>
 <div class="page">
   <div class="hero">
-    <div>
-      <h1>🖊️ 数据标注</h1>
+    <div class="hero-text">
+      <h1>
+        🖊️ 数据标注中心
+      </h1>
       <p>
-        标注在独立工具 Auto-labeling-LH 中完成（画框 / SAM3 / 深度）。
-        平台负责入口跳转，以及把 LabelMe 结果回显到数据浏览与样本详情。
+        使用 Auto-labeling-LH 完成目标检测数据标注，
+        支持人工框选、SAM3自动检测、深度信息生成，
+        标注结果自动同步回平台。
       </p>
+    </div>
+    <div class="hero-info">
+      <div>
+        <span>工具状态</span>
+        <strong>
+          {{health===true?'在线':'未连接'}}
+        </strong>
+      </div>
+      <div>
+        <span>支持算法</span>
+        <strong>
+          SAM3 / LabelMe
+        </strong>
+      </div>
     </div>
   </div>
 
@@ -25,7 +42,7 @@
 
   <div class="grid">
     <div class="card">
-      <h3>使用步骤</h3>
+      <h3>📌 使用步骤</h3>
       <ol>
         <li>在本机启动 Auto-labeling-LH（默认 <code>http://127.0.0.1:8080</code>）</li>
         <li>点击上方「打开标注工具」，在新标签页标注</li>
@@ -35,7 +52,7 @@
       </ol>
     </div>
     <div class="card">
-      <h3>启动标注服务</h3>
+      <h3>🚀 启动标注服务</h3>
       <p class="hint">在仓库根目录执行（需已安装该工具依赖）：</p>
       <pre>cd Auto-labeling-LH
 python -m web_server.app</pre>
@@ -48,7 +65,7 @@ uvicorn web_server.app:app --host 0.0.0.0 --port 8080</pre>
       </p>
     </div>
     <div class="card">
-      <h3>结果如何回到平台</h3>
+      <h3>🔄 结果如何回到平台</h3>
       <ul>
         <li>LH 工具默认写出目录：<code>label_with_annotation_and_depth/</code>（仓库根旁）</li>
         <li>也可使用：<code>label_with_cameras_capture_*</code></li>
@@ -100,42 +117,88 @@ onMounted(refreshHealth)
 
 <style scoped>
 .page {
-  padding: 28px;
-  max-width: 1100px;
-  margin: auto;
-  background: #f8fafc;
-  min-height: 100vh;
+  padding:28px;
+  width:100%;
+  max-width:none;
+  background:#f8fafc;
+  min-height:100vh;
 }
-.hero {
-  padding: 40px 44px;
-  margin-bottom: 22px;
-  border-radius: 18px;
-  color: white;
-  background: linear-gradient(135deg, #0f172a, #1e3a8a);
-  box-shadow: 0 10px 30px rgba(30, 64, 175, 0.18);
+.hero{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:45px 50px;
+margin-bottom:26px;
+border-radius:22px;
+background:
+linear-gradient(
+135deg,
+#0f172a,
+#2563eb
+);
+color:white;
+box-shadow:
+0 15px 40px rgba(37,99,235,.25);
 }
-.hero h1 {
-  font-size: 30px;
-  margin: 0 0 10px;
+
+.hero-text{
+max-width:750px;
 }
-.hero p {
-  margin: 0;
-  opacity: 0.92;
-  line-height: 1.7;
-  font-size: 15px;
+
+.hero h1{
+font-size:32px;
+margin-bottom:12px;
 }
-.status-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  background: white;
-  border-radius: 16px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+
+.hero p{
+font-size:16px;
+line-height:1.8;
+opacity:.9;
 }
+
+.hero-info{
+display:flex;
+gap:20px;
+}
+
+.hero-info div{
+background:
+rgba(255,255,255,.15);
+padding:20px 28px;
+border-radius:16px;
+backdrop-filter:blur(8px);
+}
+
+.hero-info span{
+display:block;
+font-size:13px;
+opacity:.8;
+}
+
+.hero-info strong{
+display:block;
+margin-top:8px;
+font-size:20px;
+}
+
+.status-card{
+background:white;
+border-radius:18px;
+padding:22px 28px;
+margin-bottom:26px;
+border:
+1px solid #e2e8f0;
+box-shadow:
+0 10px 30px rgba(15,23,42,.08);
+}
+
+.status-card:hover{
+transform:translateY(-3px);
+box-shadow:
+0 15px 35px rgba(15,23,42,.12);
+transition:.3s;
+}
+
 .status-left {
   display: flex;
   align-items: center;
@@ -152,17 +215,29 @@ onMounted(refreshHealth)
   gap: 10px;
   flex-wrap: wrap;
 }
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+.grid{
+display:grid;
+grid-template-columns:
+repeat(3,1fr);
+gap:24px;
 }
-.card {
-  background: white;
-  border-radius: 16px;
-  padding: 20px 22px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+.card{
+background:white;
+border-radius:18px;
+padding:24px;
+border:
+1px solid #e2e8f0;
+box-shadow:
+0 8px 24px rgba(15,23,42,.05);
+transition:.3s;
 }
+
+.card:hover{
+transform:translateY(-5px);
+box-shadow:
+0 15px 35px rgba(15,23,42,.1);
+}
+
 .card h3 {
   margin: 0 0 12px;
   font-size: 16px;
@@ -182,15 +257,15 @@ onMounted(refreshHealth)
   font-size: 13px;
   line-height: 1.6;
 }
-pre {
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 10px;
-  font-size: 12px;
-  overflow-x: auto;
-  line-height: 1.55;
+pre{
+margin-top:12px;
+padding:18px;
+background:#f8fafc;
+color:#1e293b;
+border:1px solid #e2e8f0;
+border-radius:14px;
+font-size:13px;
+line-height:1.7;
 }
 code {
   font-size: 12px;
